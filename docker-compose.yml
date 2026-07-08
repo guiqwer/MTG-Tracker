@@ -38,10 +38,12 @@ services:
     depends_on:
       - api
     # Public entrypoint: nginx serves the built SPA and proxies /api -> api:3000.
-    # The host mapping is only for local access; on the PDC the domain routes to
-    # the container's port 80 directly.
-    ports:
-      - "${WEB_PORT:-8080}:80"
+    # On the PDC the domain routes straight to this container port, so no host
+    # publish is needed. To reach it locally, publish a port on the fly:
+    #   docker compose run --rm --service-ports -p 8080:80 web
+    # or add a gitignored docker-compose.override.yml with a `ports:` mapping.
+    expose:
+      - "80"
 
 volumes:
   pgdata:
