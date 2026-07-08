@@ -75,9 +75,9 @@ export function DashboardPage() {
   const o = overview.data
   const stats = [
     { label: 'Matches', value: o?.matches, icon: Swords, chip: 'bg-primary/10 text-primary' },
-    { label: 'Players', value: o?.players, icon: Users, chip: 'bg-emerald-500/10 text-emerald-400' },
-    { label: 'Decks', value: o?.decks, icon: Layers, chip: 'bg-amber-500/10 text-amber-400' },
-    { label: 'Events', value: o?.events, icon: Activity, chip: 'bg-sky-500/10 text-sky-400' },
+    { label: 'Players', value: o?.players, icon: Users, chip: 'bg-emerald-500/10 text-emerald-600' },
+    { label: 'Decks', value: o?.decks, icon: Layers, chip: 'bg-amber-500/10 text-amber-600' },
+    { label: 'Events', value: o?.events, icon: Activity, chip: 'bg-sky-500/10 text-sky-600' },
   ]
   const avgLine = [
     o?.avgDurationMins ? `${Math.round(o.avgDurationMins)} min` : null,

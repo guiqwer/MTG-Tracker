@@ -19,19 +19,19 @@ const FEATURES = [
   },
   {
     icon: Trophy,
-    chip: 'bg-amber-500/10 text-amber-400',
+    chip: 'bg-amber-500/10 text-amber-600',
     title: 'Multiplayer podium',
     desc: 'Not just a winner: full 1st–4th placement per seat, the way Commander actually plays.',
   },
   {
     icon: Activity,
-    chip: 'bg-sky-500/10 text-sky-400',
+    chip: 'bg-sky-500/10 text-sky-600',
     title: 'Event timeline',
     desc: 'Removals, tutors, board wipes, combos — log every beat with actor, target and card.',
   },
   {
     icon: BarChart3,
-    chip: 'bg-emerald-500/10 text-emerald-400',
+    chip: 'bg-emerald-500/10 text-emerald-600',
     title: 'Stats & rankings',
     desc: 'Winrates, matchups and averages for players and decks, at a glance.',
   },
@@ -45,7 +45,7 @@ const STEPS = [
 
 function PublicNav() {
   return (
-    <header className="sticky top-0 z-30 bg-background/80 backdrop-blur-md">
+    <header className="sticky top-0 z-30 border-b border-border/70 bg-background/80 backdrop-blur-md">
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 sm:px-8">
         <Link to="/" className="flex items-center gap-2.5">
           <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-sm shadow-primary/30">
@@ -64,7 +64,6 @@ function PublicNav() {
           </Link>
         </div>
       </div>
-      <div className="spectrum-bar h-0.5 w-full opacity-80" />
     </header>
   )
 }

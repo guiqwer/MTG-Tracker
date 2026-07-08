@@ -2,18 +2,16 @@
 
 @custom-variant dark (&:is(.dark *));
 
-/* "Espectro de Mana" — dark indigo base, neon-violet primary, WUBRG accents. */
+/* "Arena" — light, airy, one strong violet accent. */
 :root {
   --radius: 0.8rem;
-
-  /* light fallback (kept for a future toggle) */
   --background: oklch(0.984 0.003 280);
   --foreground: oklch(0.24 0.02 280);
   --card: oklch(1 0 0);
   --card-foreground: oklch(0.24 0.02 280);
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.24 0.02 280);
-  --primary: oklch(0.55 0.24 292);
+  --primary: oklch(0.55 0.23 285);
   --primary-foreground: oklch(0.99 0 0);
   --secondary: oklch(0.965 0.004 280);
   --secondary-foreground: oklch(0.3 0.02 285);
@@ -24,50 +22,35 @@
   --destructive: oklch(0.58 0.22 25);
   --border: oklch(0.915 0.006 280);
   --input: oklch(0.9 0.007 280);
-  --ring: oklch(0.55 0.24 292);
+  --ring: oklch(0.55 0.23 285);
   --success: oklch(0.55 0.15 152);
   --warning: oklch(0.62 0.15 68);
   --gold: oklch(0.62 0.13 78);
-
-  /* WUBRG mana accents — theme-independent (the five colors of Magic) */
-  --mana-w: oklch(0.9 0.07 95);
-  --mana-u: oklch(0.62 0.17 250);
-  --mana-b: oklch(0.62 0.15 300);
-  --mana-r: oklch(0.63 0.2 25);
-  --mana-g: oklch(0.68 0.16 150);
-  --spectrum: linear-gradient(
-    90deg,
-    var(--mana-w),
-    var(--mana-u),
-    var(--mana-b),
-    var(--mana-r),
-    var(--mana-g)
-  );
 }
 
-/* Dark is the default (see <html class="dark">). */
+/* Optional dark theme (kept consistent for a future toggle). */
 .dark {
-  --background: oklch(0.16 0.03 285);
-  --foreground: oklch(0.92 0.015 262);
-  --card: oklch(0.22 0.032 288);
-  --card-foreground: oklch(0.92 0.015 262);
-  --popover: oklch(0.2 0.032 288);
-  --popover-foreground: oklch(0.92 0.015 262);
-  --primary: oklch(0.58 0.24 292);
-  --primary-foreground: oklch(0.99 0.01 292);
-  --secondary: oklch(0.29 0.03 288);
-  --secondary-foreground: oklch(0.92 0.015 262);
-  --muted: oklch(0.27 0.026 288);
-  --muted-foreground: oklch(0.7 0.02 262);
-  --accent: oklch(0.33 0.05 292);
-  --accent-foreground: oklch(0.96 0.01 262);
-  --destructive: oklch(0.64 0.22 22);
+  --background: oklch(0.17 0.006 285);
+  --foreground: oklch(0.97 0.004 285);
+  --card: oklch(0.21 0.008 285);
+  --card-foreground: oklch(0.97 0.004 285);
+  --popover: oklch(0.2 0.008 285);
+  --popover-foreground: oklch(0.97 0.004 285);
+  --primary: oklch(0.63 0.2 288);
+  --primary-foreground: oklch(0.15 0.02 288);
+  --secondary: oklch(0.27 0.01 285);
+  --secondary-foreground: oklch(0.97 0.004 285);
+  --muted: oklch(0.25 0.008 285);
+  --muted-foreground: oklch(0.72 0.012 285);
+  --accent: oklch(0.3 0.02 288);
+  --accent-foreground: oklch(0.98 0.004 285);
+  --destructive: oklch(0.63 0.21 25);
   --border: oklch(1 0 0 / 9%);
-  --input: oklch(1 0 0 / 13%);
-  --ring: oklch(0.62 0.22 292);
-  --success: oklch(0.74 0.18 152);
-  --warning: oklch(0.8 0.15 72);
-  --gold: oklch(0.84 0.14 90);
+  --input: oklch(1 0 0 / 12%);
+  --ring: oklch(0.63 0.2 288);
+  --success: oklch(0.72 0.17 152);
+  --warning: oklch(0.78 0.15 70);
+  --gold: oklch(0.82 0.14 88);
 }
 
 @theme inline {
@@ -96,11 +79,6 @@
   --color-success: var(--success);
   --color-warning: var(--warning);
   --color-gold: var(--gold);
-  --color-mana-w: var(--mana-w);
-  --color-mana-u: var(--mana-u);
-  --color-mana-b: var(--mana-b);
-  --color-mana-r: var(--mana-r);
-  --color-mana-g: var(--mana-g);
   --font-sans: "Inter Variable", ui-sans-serif, system-ui, -apple-system, sans-serif;
 }
 
@@ -118,11 +96,12 @@
     @apply bg-background text-foreground;
     font-family: var(--font-sans);
     font-feature-settings: "cv02", "cv03", "cv04", "cv11";
-    /* Spectrum aurora — colored glows bleeding from the top. */
-    background-image:
-      radial-gradient(880px 500px at 6% -8%, oklch(0.58 0.24 292 / 0.24), transparent 60%),
-      radial-gradient(820px 460px at 94% -6%, oklch(0.6 0.16 250 / 0.16), transparent 60%),
-      radial-gradient(720px 520px at 58% -2%, oklch(0.62 0.18 330 / 0.1), transparent 55%);
+    /* Faint violet wash at the top — airy, premium, not busy. */
+    background-image: radial-gradient(
+      1100px 520px at 50% -12%,
+      oklch(0.55 0.23 285 / 0.07),
+      transparent 70%
+    );
     background-attachment: fixed;
   }
   th,
@@ -134,32 +113,27 @@
 @layer base {
   * {
     scrollbar-width: thin;
-    scrollbar-color: oklch(0.42 0.03 288) transparent;
+    scrollbar-color: oklch(0.8 0.01 280) transparent;
   }
   ::-webkit-scrollbar {
     width: 10px;
     height: 10px;
   }
   ::-webkit-scrollbar-thumb {
-    background: oklch(0.4 0.03 288);
+    background: oklch(0.82 0.01 280);
     border-radius: 9999px;
     border: 2px solid transparent;
     background-clip: content-box;
   }
   ::-webkit-scrollbar-thumb:hover {
-    background: oklch(0.5 0.04 290);
+    background: oklch(0.72 0.01 280);
     background-clip: content-box;
   }
   ::selection {
-    background: oklch(0.58 0.24 292 / 0.4);
+    background: oklch(0.55 0.23 285 / 0.18);
   }
 }
 
-/* Thin WUBRG spectrum divider used under the top nav. */
-.spectrum-bar {
-  background: var(--spectrum);
-}
-
 .ms-cost {
-  box-shadow: 0 1px 2px rgb(0 0 0 / 0.45);
+  box-shadow: 0 1px 1px rgb(0 0 0 / 0.2);
 }
