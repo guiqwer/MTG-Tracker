@@ -25,5 +25,8 @@ coverage/
 Thumbs.db
 *.log
 
+# Local-only compose override (publishes ports for local browsing)
+docker-compose.override.yml
+
 # Claude Code (machine-specific local settings)
 .claude/settings.local.json

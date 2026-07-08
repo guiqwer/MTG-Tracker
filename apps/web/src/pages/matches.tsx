@@ -300,7 +300,7 @@ export function MatchesPage() {
               (a, b) => (a.placement ?? 99) - (b.placement ?? 99),
             )
             return (
-              <Link key={m.id} to={`/matches/${m.id}`} className="block">
+              <Link key={m.id} to={`/app/matches/${m.id}`} className="block">
                 <Card className="group transition-colors hover:border-primary/40">
                   <CardContent className="p-4">
                     <div className="mb-3 flex flex-wrap items-center justify-between gap-2">

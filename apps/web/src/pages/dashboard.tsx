@@ -118,7 +118,7 @@ export function DashboardPage() {
             <div className="mb-5 flex items-center justify-between">
               <h2 className="font-semibold">Top players</h2>
               <Link
-                to="/players"
+                to="/app/players"
                 className="flex items-center gap-1 text-xs font-medium text-primary hover:underline"
               >
                 View all <ArrowRight className="h-3 w-3" />
@@ -153,7 +153,7 @@ export function DashboardPage() {
             <div className="mb-5 flex items-center justify-between">
               <h2 className="font-semibold">Top decks</h2>
               <Link
-                to="/decks"
+                to="/app/decks"
                 className="flex items-center gap-1 text-xs font-medium text-primary hover:underline"
               >
                 View all <ArrowRight className="h-3 w-3" />

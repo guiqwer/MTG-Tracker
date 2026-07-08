@@ -156,7 +156,7 @@ export function MatchDetailPage() {
     onSuccess: () => {
       toast.success('Match removed')
       invalidate()
-      navigate('/matches')
+      navigate('/app/matches')
     },
   })
 
@@ -167,7 +167,7 @@ export function MatchDetailPage() {
   return (
     <div className="space-y-6">
       <Link
-        to="/matches"
+        to="/app/matches"
         className="inline-flex items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground"
       >
         <ChevronLeft className="h-4 w-4" /> Matches

@@ -1,21 +1,20 @@
-import type { ReactNode } from 'react'
-import { NavLink } from 'react-router-dom'
+import { Link, NavLink, Outlet } from 'react-router-dom'
 import { LayoutDashboard, Users, Layers, Swords } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 const nav = [
-  { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
-  { to: '/players', label: 'Players', icon: Users, end: false },
-  { to: '/decks', label: 'Decks', icon: Layers, end: false },
-  { to: '/matches', label: 'Matches', icon: Swords, end: false },
+  { to: '/app', label: 'Dashboard', icon: LayoutDashboard, end: true },
+  { to: '/app/players', label: 'Players', icon: Users, end: false },
+  { to: '/app/decks', label: 'Decks', icon: Layers, end: false },
+  { to: '/app/matches', label: 'Matches', icon: Swords, end: false },
 ]
 
-export function Layout({ children }: { children: ReactNode }) {
+export function Layout() {
   return (
     <div className="min-h-dvh">
       <header className="sticky top-0 z-30 border-b border-border/70 bg-background/80 backdrop-blur-md">
         <div className="mx-auto flex h-16 max-w-6xl items-center gap-4 px-4 sm:gap-6 sm:px-8">
-          <div className="flex items-center gap-2.5">
+          <Link to="/app" className="flex items-center gap-2.5">
             <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-sm shadow-primary/30">
               <i className="ms ms-u" />
             </div>
@@ -23,7 +22,7 @@ export function Layout({ children }: { children: ReactNode }) {
               Magic Match{' '}
               <span className="font-medium text-muted-foreground">Tracker</span>
             </span>
-          </div>
+          </Link>
 
           <nav className="flex items-center gap-1">
             {nav.map((item) => (
@@ -49,7 +48,9 @@ export function Layout({ children }: { children: ReactNode }) {
       </header>
 
       <main>
-        <div className="mx-auto max-w-6xl px-4 py-8 sm:px-8 sm:py-10">{children}</div>
+        <div className="mx-auto max-w-6xl px-4 py-8 sm:px-8 sm:py-10">
+          <Outlet />
+        </div>
       </main>
     </div>
   )
