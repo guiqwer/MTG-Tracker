@@ -1,4 +1,5 @@
-FROM oven/bun:1
+# --- build stage: compile the SPA with Vite ---
+FROM oven/bun:1 AS build
 
 WORKDIR /app
 
@@ -10,5 +11,17 @@ RUN bun install
 
 COPY . .
 
-EXPOSE 5173
-CMD ["sh", "-c", "cd /app/apps/web && bunx vite --host 0.0.0.0 --port 5173"]
+# The API is reached same-origin through the nginx proxy (see nginx.conf), so the
+# client is built to call the relative "/api" path. Resolved to an absolute URL at
+# runtime in src/lib/eden.ts.
+ARG VITE_API_URL=/api
+ENV VITE_API_URL=$VITE_API_URL
+RUN cd apps/web && bun run build
+
+# --- runtime stage: serve the static build + reverse-proxy the API ---
+FROM nginx:alpine
+
+COPY apps/web/nginx.conf /etc/nginx/conf.d/default.conf
+COPY --from=build /app/apps/web/dist /usr/share/nginx/html
+
+EXPOSE 80
