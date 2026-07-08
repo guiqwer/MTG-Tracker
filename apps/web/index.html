@@ -4,6 +4,21 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Magic Match Tracker</title>
+    <script>
+      // Rotate the accent through the five colors of Magic (WUBRG) on each visit.
+      (function () {
+        try {
+          var colors = ['white', 'blue', 'black', 'red', 'green']
+          var prev = parseInt(localStorage.getItem('mtgAccentIdx') || '-1', 10)
+          var i = (isNaN(prev) ? -1 : prev) + 1
+          if (i < 0 || i >= colors.length) i = 0
+          localStorage.setItem('mtgAccentIdx', String(i))
+          var el = document.documentElement
+          el.classList.add('mtg-' + colors[i])
+          el.setAttribute('data-mtg', colors[i])
+        } catch (e) {}
+      })()
+    </script>
   </head>
   <body>
     <div id="root"></div>

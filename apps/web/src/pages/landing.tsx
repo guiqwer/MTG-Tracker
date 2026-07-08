@@ -9,6 +9,7 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
+import { currentAccent, ACCENT_IMAGE } from '@/lib/accent'
 
 const FEATURES = [
   {
@@ -77,7 +78,7 @@ const MINI_DECKS: Array<[string, string[], string]> = [
 function HeroPreview() {
   return (
     <div className="relative">
-      <div className="pointer-events-none absolute -inset-6 rounded-[2rem] bg-gradient-to-tr from-primary/25 via-violet-400/10 to-transparent blur-2xl" />
+      <div className="pointer-events-none absolute -inset-6 rounded-[2rem] bg-gradient-to-tr from-primary/30 to-transparent blur-2xl" />
       <div className="relative rotate-1 rounded-2xl border bg-card p-4 shadow-xl shadow-primary/10">
         <div className="grid grid-cols-3 gap-3">
           {[
@@ -111,9 +112,20 @@ function HeroPreview() {
 }
 
 export function LandingPage() {
+  const backdrop = ACCENT_IMAGE[currentAccent()]
   return (
     <div className="min-h-dvh">
       <PublicNav />
+
+      <div className="relative overflow-hidden">
+        {/* accent art backdrop — a subtle complement to the current color */}
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[680px]"
+        >
+          <img src={backdrop} alt="" className="h-full w-full object-cover opacity-[0.14]" />
+          <div className="absolute inset-0 bg-gradient-to-b from-background/20 via-background/70 to-background" />
+        </div>
 
       {/* Hero */}
       <section className="mx-auto grid max-w-6xl items-center gap-12 px-4 py-16 sm:px-8 lg:grid-cols-2 lg:py-24">
@@ -212,6 +224,7 @@ export function LandingPage() {
           </p>
         </div>
       </footer>
+      </div>
     </div>
   )
 }

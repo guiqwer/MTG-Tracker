@@ -28,6 +28,14 @@
   --gold: oklch(0.62 0.13 78);
 }
 
+/* Accent rotates through the five colors of Magic (WUBRG). The class is set on
+   <html> by the inline script in index.html — a fresh color on each visit. */
+:root.mtg-white { --primary: oklch(0.55 0.1 85); --primary-foreground: oklch(0.99 0 0); --ring: oklch(0.55 0.1 85); }
+:root.mtg-blue  { --primary: oklch(0.52 0.14 248); --primary-foreground: oklch(0.99 0 0); --ring: oklch(0.52 0.14 248); }
+:root.mtg-black { --primary: oklch(0.34 0.05 305); --primary-foreground: oklch(0.99 0 0); --ring: oklch(0.34 0.05 305); }
+:root.mtg-red   { --primary: oklch(0.54 0.2 27);  --primary-foreground: oklch(0.99 0 0); --ring: oklch(0.54 0.2 27); }
+:root.mtg-green { --primary: oklch(0.5 0.13 152); --primary-foreground: oklch(0.99 0 0); --ring: oklch(0.5 0.13 152); }
+
 /* Optional dark theme (kept consistent for a future toggle). */
 .dark {
   --background: oklch(0.17 0.006 285);
@@ -96,10 +104,10 @@
     @apply bg-background text-foreground;
     font-family: var(--font-sans);
     font-feature-settings: "cv02", "cv03", "cv04", "cv11";
-    /* Faint violet wash at the top — airy, premium, not busy. */
+    /* Faint wash tinted by the current accent color — airy, not busy. */
     background-image: radial-gradient(
       1100px 520px at 50% -12%,
-      oklch(0.55 0.23 285 / 0.07),
+      color-mix(in oklab, var(--primary) 9%, transparent),
       transparent 70%
     );
     background-attachment: fixed;
@@ -130,7 +138,7 @@
     background-clip: content-box;
   }
   ::selection {
-    background: oklch(0.55 0.23 285 / 0.18);
+    background: color-mix(in oklab, var(--primary) 22%, transparent);
   }
 }
 
