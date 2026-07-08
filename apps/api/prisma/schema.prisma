@@ -16,6 +16,20 @@ datasource db {
 // People & cards
 // ─────────────────────────────────────────────────────────────────────────────
 
+// Login accounts (self-hosted auth). Separate from Player — logging in gates
+// access to the shared playgroup data.
+model User {
+  id           String   @id @default(cuid())
+  username     String   @unique
+  email        String   @unique
+  passwordHash String
+  dateOfBirth  DateTime
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@map("users")
+}
+
 model Player {
   id          String   @id @default(cuid())
   name        String   @unique

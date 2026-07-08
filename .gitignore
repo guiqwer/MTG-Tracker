@@ -30,3 +30,8 @@ docker-compose.override.yml
 
 # Claude Code (machine-specific local settings)
 .claude/settings.local.json
+
+# OAuth skill tooling (vendored clones — not part of the app)
+/api/
+/oauth-developer-skills/
+.claude/skills/

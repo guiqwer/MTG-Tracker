@@ -144,7 +144,7 @@ export function LandingPage() {
             <Link to="/signup">
               <Button size="lg">Get started free</Button>
             </Link>
-            <Link to="/app">
+            <Link to="/login">
               <Button size="lg" variant="outline">
                 Try the demo <ArrowRight />
               </Button>

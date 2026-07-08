@@ -1,7 +1,20 @@
 import { prisma } from './lib/prisma'
 import { importCardByName } from './lib/cards'
+import { hashPassword } from './security/passwords'
 
 async function main() {
+  // Demo login account (idempotent) — username: demo · password: password12
+  await prisma.user.upsert({
+    where: { username: 'demo' },
+    update: {},
+    create: {
+      username: 'demo',
+      email: 'demo@mtg.local',
+      passwordHash: await hashPassword('password12'),
+      dateOfBirth: new Date('1995-05-05'),
+    },
+  })
+
   const roster = [
     { name: 'Alex', color: '#7c3aed' },
     { name: 'Sam', color: '#0ea5e9' },

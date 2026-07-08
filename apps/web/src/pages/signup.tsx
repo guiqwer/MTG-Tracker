@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
+import { api } from '@/lib/eden'
+import { setToken } from '@/lib/auth'
 import { AuthShell } from '@/components/auth-shell'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -8,9 +10,44 @@ import { Label } from '@/components/ui/label'
 
 export function SignupPage() {
   const navigate = useNavigate()
-  const [name, setName] = useState('')
+  const [username, setUsername] = useState('')
   const [email, setEmail] = useState('')
+  const [dateOfBirth, setDateOfBirth] = useState('')
   const [password, setPassword] = useState('')
+  const [confirm, setConfirm] = useState('')
+  const [loading, setLoading] = useState(false)
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (password !== confirm) {
+      toast.error('Passwords do not match')
+      return
+    }
+    if (password.length < 8) {
+      toast.error('Password must be at least 8 characters')
+      return
+    }
+    setLoading(true)
+    try {
+      const { data, error } = await api.auth.signup.post({
+        username,
+        email,
+        password,
+        dateOfBirth,
+      })
+      if (error || !data?.token) throw error ?? new Error('no token')
+      setToken(data.token)
+      toast.success('Account created')
+      navigate('/app')
+    } catch (err) {
+      const msg =
+        (err as { value?: { error_description?: string } })?.value?.error_description ??
+        'Could not create the account (username or email may be taken)'
+      toast.error(msg)
+    } finally {
+      setLoading(false)
+    }
+  }
 
   return (
     <AuthShell
@@ -25,22 +62,15 @@ export function SignupPage() {
         </>
       }
     >
-      <form
-        className="space-y-4"
-        onSubmit={(e) => {
-          e.preventDefault()
-          toast.success('Account created (demo)')
-          navigate('/app')
-        }}
-      >
+      <form className="space-y-4" onSubmit={submit}>
         <div className="grid gap-1.5">
-          <Label htmlFor="name">Name</Label>
+          <Label htmlFor="username">Username</Label>
           <Input
-            id="name"
-            autoComplete="name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="e.g. Alex"
+            id="username"
+            autoComplete="username"
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+            placeholder="e.g. alex"
           />
         </div>
         <div className="grid gap-1.5">
@@ -55,6 +85,15 @@ export function SignupPage() {
           />
         </div>
         <div className="grid gap-1.5">
+          <Label htmlFor="dob">Date of birth</Label>
+          <Input
+            id="dob"
+            type="date"
+            value={dateOfBirth}
+            onChange={(e) => setDateOfBirth(e.target.value)}
+          />
+        </div>
+        <div className="grid gap-1.5">
           <Label htmlFor="password">Password</Label>
           <Input
             id="password"
@@ -65,8 +104,23 @@ export function SignupPage() {
             placeholder="At least 8 characters"
           />
         </div>
-        <Button type="submit" className="w-full">
-          Create account
+        <div className="grid gap-1.5">
+          <Label htmlFor="confirm">Confirm password</Label>
+          <Input
+            id="confirm"
+            type="password"
+            autoComplete="new-password"
+            value={confirm}
+            onChange={(e) => setConfirm(e.target.value)}
+            placeholder="Repeat your password"
+          />
+        </div>
+        <Button
+          type="submit"
+          className="w-full"
+          disabled={loading || !username || !email || !dateOfBirth || !password || !confirm}
+        >
+          {loading ? 'Creating account…' : 'Create account'}
         </Button>
       </form>
     </AuthShell>

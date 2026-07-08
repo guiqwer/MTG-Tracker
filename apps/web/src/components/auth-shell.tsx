@@ -41,9 +41,6 @@ export function AuthShell({
             </div>
           </CardContent>
         </Card>
-        <p className="mt-4 text-center text-xs text-muted-foreground/80">
-          Demo — authentication isn't wired yet; any details take you to the app.
-        </p>
       </div>
     </div>
   )

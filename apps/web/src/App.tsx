@@ -2,6 +2,7 @@ import { QueryClientProvider } from '@tanstack/react-query'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { Toaster } from 'sonner'
 import { queryClient } from './lib/query'
+import { isAuthenticated } from './lib/auth'
 import { Layout } from './components/layout'
 import { LandingPage } from './pages/landing'
 import { LoginPage } from './pages/login'
@@ -11,6 +12,11 @@ import { PlayersPage } from './pages/players'
 import { DecksPage } from './pages/decks'
 import { MatchesPage } from './pages/matches'
 import { MatchDetailPage } from './pages/match-detail'
+
+// Gate the app behind a valid session; otherwise send to login.
+function RequireAuth() {
+  return isAuthenticated() ? <Layout /> : <Navigate to="/login" replace />
+}
 
 export function App() {
   return (
@@ -22,8 +28,8 @@ export function App() {
           <Route path="/login" element={<LoginPage />} />
           <Route path="/signup" element={<SignupPage />} />
 
-          {/* App (top-nav layout) */}
-          <Route path="/app" element={<Layout />}>
+          {/* App (requires login) */}
+          <Route path="/app" element={<RequireAuth />}>
             <Route index element={<DashboardPage />} />
             <Route path="players" element={<PlayersPage />} />
             <Route path="decks" element={<DecksPage />} />

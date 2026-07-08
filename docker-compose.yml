@@ -26,6 +26,8 @@ services:
       DATABASE_URL: postgresql://${POSTGRES_USER:-mtg}:${POSTGRES_PASSWORD:-mtg}@db:5432/${POSTGRES_DB:-mtgtracker}?schema=public
       PORT: "3000"
       NODE_ENV: production
+      # Auth signing secret — set a strong value in the PDC/Coolify env for prod.
+      JWT_SECRET: ${JWT_SECRET:-dev-insecure-secret-change-me}
     # Internal only — reached by the web service through the nginx proxy.
     expose:
       - "3000"
