@@ -4,6 +4,24 @@ import { Badge } from '@/components/ui/badge'
 import { Avatar } from '@/components/ui/avatar'
 import { ColorIdentity } from '@/components/mana'
 
+const MANA_HEX: Record<string, string> = {
+  W: '#efe4a8',
+  U: '#4a7fd4',
+  B: '#9a6ad0',
+  R: '#e0554f',
+  G: '#4fb872',
+}
+const WUBRG = ['W', 'U', 'B', 'R', 'G']
+
+// A solid mana color (mono) or a WUBRG-ordered gradient for the tile's accent.
+function identityBackground(colors: string[]): string {
+  if (!colors?.length) return 'var(--muted-foreground)'
+  const hexes = [...colors]
+    .sort((a, b) => WUBRG.indexOf(a) - WUBRG.indexOf(b))
+    .map((c) => MANA_HEX[c] ?? '#8a8a8a')
+  return hexes.length === 1 ? hexes[0] : `linear-gradient(90deg, ${hexes.join(', ')})`
+}
+
 export interface DeckCardData {
   id: string
   name: string
@@ -25,8 +43,10 @@ export function DeckCard({
 }) {
   const art = deck.commander?.artCropUrl
   const games = deck._count.participations
+  const identityBg = identityBackground(deck.colorIdentity)
   return (
-    <div className="group relative overflow-hidden rounded-xl border bg-card transition-all duration-200 hover:border-primary/40 hover:shadow-lg hover:shadow-primary/5">
+    <div className="group relative overflow-hidden rounded-xl border bg-card transition-all duration-200 hover:border-primary/40 hover:shadow-lg hover:shadow-primary/10">
+      <div className="h-1 w-full" style={{ background: identityBg }} />
       <div className="relative h-32 overflow-hidden">
         {art ? (
           <img

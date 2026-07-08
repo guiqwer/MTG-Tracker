@@ -12,7 +12,7 @@ const nav = [
 export function Layout() {
   return (
     <div className="min-h-dvh">
-      <header className="sticky top-0 z-30 border-b border-border/70 bg-background/80 backdrop-blur-md">
+      <header className="sticky top-0 z-30 bg-background/80 backdrop-blur-md">
         <div className="mx-auto flex h-16 max-w-6xl items-center gap-4 px-4 sm:gap-6 sm:px-8">
           <Link to="/app" className="flex items-center gap-2.5">
             <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-sm shadow-primary/30">
@@ -45,6 +45,7 @@ export function Layout() {
             ))}
           </nav>
         </div>
+        <div className="spectrum-bar h-0.5 w-full opacity-80" />
       </header>
 
       <main>
