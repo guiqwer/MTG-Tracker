@@ -1,0 +1,29 @@
+# Dependencies
+node_modules/
+apps/*/node_modules/
+
+# Build output
+dist/
+build/
+apps/*/dist/
+
+# Environment (keep .env.example committed)
+.env
+.env.local
+.env.*.local
+
+# Caches / generated
+.vite/
+*.tsbuildinfo
+apps/api/src/generated/
+coverage/
+
+# Editor / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+*.log
+
+# Claude Code (machine-specific local settings)
+.claude/settings.local.json

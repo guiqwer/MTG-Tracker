@@ -1,0 +1,18 @@
+{
+  "name": "mtgtracker",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "apps/*"
+  ],
+  "scripts": {
+    "dev": "docker compose up",
+    "dev:build": "docker compose up --build",
+    "down": "docker compose down",
+    "reset": "docker compose down -v",
+    "logs": "docker compose logs -f",
+    "db:studio": "docker compose exec api bunx prisma studio --hostname 0.0.0.0",
+    "db:push": "docker compose exec api bunx prisma db push",
+    "seed": "docker compose exec api bun run src/seed.ts"
+  }
+}

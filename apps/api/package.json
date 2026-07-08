@@ -1,0 +1,29 @@
+{
+  "name": "@mtg/api",
+  "version": "0.1.0",
+  "type": "module",
+  "module": "src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "dev": "bun run --watch src/index.ts",
+    "start": "bun run src/index.ts",
+    "seed": "bun run src/seed.ts",
+    "prisma:generate": "prisma generate",
+    "prisma:push": "prisma db push --accept-data-loss",
+    "db:setup": "prisma generate && prisma db push --accept-data-loss",
+    "prisma:studio": "prisma studio --hostname 0.0.0.0"
+  },
+  "dependencies": {
+    "@elysiajs/cors": "^1.4.0",
+    "@prisma/client": "^6.19.0",
+    "elysia": "^1.4.0"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "prisma": "^6.19.0",
+    "typescript": "^5.9.0"
+  }
+}

@@ -1,0 +1,72 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: mtg_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-mtg}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-mtg}
+      POSTGRES_DB: ${POSTGRES_DB:-mtgtracker}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-mtg} -d ${POSTGRES_DB:-mtgtracker}"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    container_name: mtg_api
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-mtg}:${POSTGRES_PASSWORD:-mtg}@db:5432/${POSTGRES_DB:-mtgtracker}?schema=public
+      PORT: "3000"
+      WEB_ORIGIN: http://localhost:${WEB_PORT:-5173}
+      NODE_ENV: development
+    ports:
+      - "${API_PORT:-3000}:3000"
+    # The repo is bind-mounted for hot reload; the node_modules dirs are
+    # container-owned volumes so the host's (Fedora) native binaries never leak
+    # into the (Debian) container.
+    volumes:
+      - .:/app
+      - api_nm_root:/app/node_modules
+      - api_nm_api:/app/apps/api/node_modules
+      - api_nm_web:/app/apps/web/node_modules
+    command: ["sh", "./apps/api/docker-entrypoint.sh"]
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    container_name: mtg_web
+    restart: unless-stopped
+    depends_on:
+      - api
+    environment:
+      VITE_API_URL: http://localhost:${API_PORT:-3000}
+    ports:
+      - "${WEB_PORT:-5173}:5173"
+    volumes:
+      - .:/app
+      - web_nm_root:/app/node_modules
+      - web_nm_api:/app/apps/api/node_modules
+      - web_nm_web:/app/apps/web/node_modules
+    command: ["sh", "./apps/web/docker-entrypoint.sh"]
+
+volumes:
+  pgdata:
+  api_nm_root:
+  api_nm_api:
+  api_nm_web:
+  web_nm_root:
+  web_nm_api:
+  web_nm_web:

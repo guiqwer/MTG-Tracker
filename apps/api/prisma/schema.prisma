@@ -1,0 +1,206 @@
+// Magic Match Tracker — domain model
+// Commander/EDH is a multiplayer (usually 4-player) free-for-all format.
+// The model is built around that reality: a match has a *podium*, not a single
+// winner, and every timeline event has an actor, an optional target and card.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// People & cards
+// ─────────────────────────────────────────────────────────────────────────────
+
+model Player {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  avatarColor String? // hex, used by the UI for the avatar chip
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  decks          Deck[]
+  participations MatchParticipant[]
+
+  @@map("players")
+}
+
+// Canonical card data pulled from Scryfall. `scryfallId` is the unique key,
+// exactly as the idea proposed.
+model Card {
+  id            String   @id @default(cuid())
+  scryfallId    String   @unique
+  oracleId      String?
+  name          String
+  imageUrl      String? // normal-size card image
+  artCropUrl    String? // cropped art, nice for headers/avatars
+  typeLine      String?
+  manaCost      String?
+  cmc           Float    @default(0)
+  colorIdentity String[] @default([]) // ["W","U","B","R","G"]
+  oracleText    String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  commanderDecks Deck[]       @relation("Commander")
+  partnerDecks   Deck[]       @relation("Partner")
+  bestInMatches  Match[]      @relation("BestCard")
+  deckCards      DeckCard[]
+  events         MatchEvent[]
+
+  @@map("cards")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Decks
+// ─────────────────────────────────────────────────────────────────────────────
+
+model Deck {
+  id            String   @id @default(cuid())
+  name          String
+  ownerId       String
+  owner         Player   @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  commanderId   String?
+  commander     Card?    @relation("Commander", fields: [commanderId], references: [id])
+  partnerId     String?
+  partner       Card?    @relation("Partner", fields: [partnerId], references: [id])
+  archetype     String?
+  powerLevel    Float? // informal 1-10 scale
+  bracket       Int? // official WotC bracket 1-5
+  colorIdentity String[] @default([]) // derived from commander (+ partner)
+  moxfieldUrl   String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  participations MatchParticipant[]
+  cards          DeckCard[] // full 100-card list (populated by import, phase 2)
+
+  @@index([ownerId])
+  @@map("decks")
+}
+
+// Join row for a deck's full card list (used by Moxfield import later).
+model DeckCard {
+  id       String @id @default(cuid())
+  deckId   String
+  deck     Deck   @relation(fields: [deckId], references: [id], onDelete: Cascade)
+  cardId   String
+  card     Card   @relation(fields: [cardId], references: [id])
+  quantity Int    @default(1)
+
+  @@unique([deckId, cardId])
+  @@map("deck_cards")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Matches
+// ─────────────────────────────────────────────────────────────────────────────
+
+model Match {
+  id           String        @id @default(cuid())
+  playedAt     DateTime      @default(now())
+  durationMins Int?
+  turns        Int?
+  winCondition WinCondition?
+  endReason    EndReason?
+  bestCardId   String?
+  bestCard     Card?         @relation("BestCard", fields: [bestCardId], references: [id])
+  notes        String?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  participants MatchParticipant[]
+  events       MatchEvent[]
+
+  @@index([playedAt])
+  @@map("matches")
+}
+
+// A "seat" at the table: which player brought which deck, and how they finished.
+// placement is the podium (1 = winner), which is what real stats are built on.
+model MatchParticipant {
+  id             String  @id @default(cuid())
+  matchId        String
+  match          Match   @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  playerId       String
+  player         Player  @relation(fields: [playerId], references: [id])
+  deckId         String
+  deck           Deck    @relation(fields: [deckId], references: [id])
+  seatOrder      Int? // 1..N turn order (who started matters a lot in EDH)
+  placement      Int? // 1 = winner, 2, 3, 4 ... (elimination order)
+  isWinner       Boolean @default(false)
+  eliminatedTurn Int?
+
+  eventsAsActor  MatchEvent[] @relation("Actor")
+  eventsAsTarget MatchEvent[] @relation("Target")
+
+  @@unique([matchId, playerId])
+  @@index([playerId])
+  @@index([deckId])
+  @@map("match_participants")
+}
+
+// One event on the match timeline. actor/target reference *participants* (seats),
+// not players directly, so a single query reconstructs the whole game.
+model MatchEvent {
+  id        String            @id @default(cuid())
+  matchId   String
+  match     Match             @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  sequence  Int // ordering within the timeline
+  turn      Int?
+  type      EventType
+  actorId   String?
+  actor     MatchParticipant? @relation("Actor", fields: [actorId], references: [id])
+  targetId  String?
+  target    MatchParticipant? @relation("Target", fields: [targetId], references: [id])
+  cardId    String?
+  card      Card?             @relation(fields: [cardId], references: [id])
+  note      String?
+  createdAt DateTime          @default(now())
+
+  @@index([matchId, sequence])
+  @@map("match_events")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Enums
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum EventType {
+  REMOVAL
+  COUNTER
+  TUTOR
+  BOARDWIPE
+  RAMP
+  DRAW
+  COMMANDER_CAST
+  COMMANDER_DIED
+  COMBO
+  INFINITE
+  ELIMINATION
+  WIN
+}
+
+enum WinCondition {
+  COMMANDER_DAMAGE
+  COMBAT_DAMAGE
+  COMBO
+  INFINITE
+  MILL
+  POISON_INFECT
+  ALT_WIN_CON
+  LAST_STANDING
+  CONCESSION
+  OTHER
+}
+
+enum EndReason {
+  NATURAL
+  TIME_CALLED
+  CONCESSION
+  DRAW
+}
