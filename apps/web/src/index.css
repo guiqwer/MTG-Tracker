@@ -30,16 +30,19 @@
 
 /* Accent rotates through the five colors of Magic (WUBRG). The class is set on
    <html> by the inline script in index.html — a fresh color on each visit. */
-:root.mtg-white { --primary: oklch(0.55 0.1 85); --primary-foreground: oklch(0.99 0 0); --ring: oklch(0.55 0.1 85); }
+/* White and black follow the official mana-symbol palette in spirit: white is
+   bone/parchment (the ⚪ symbol cream, kept near-neutral so it doesn't read as
+   yellow) and black is neutral charcoal (the ⚫ symbol gray/black, no purple). */
+:root.mtg-white { --primary: oklch(0.56 0.03 95);  --primary-foreground: oklch(0.99 0 0); --ring: oklch(0.56 0.03 95); }
 :root.mtg-blue  { --primary: oklch(0.52 0.14 248); --primary-foreground: oklch(0.99 0 0); --ring: oklch(0.52 0.14 248); }
-:root.mtg-black { --primary: oklch(0.34 0.05 305); --primary-foreground: oklch(0.99 0 0); --ring: oklch(0.34 0.05 305); }
+:root.mtg-black { --primary: oklch(0.27 0.008 285); --primary-foreground: oklch(0.99 0 0); --ring: oklch(0.27 0.008 285); }
 :root.mtg-red   { --primary: oklch(0.54 0.2 27);  --primary-foreground: oklch(0.99 0 0); --ring: oklch(0.54 0.2 27); }
 :root.mtg-green { --primary: oklch(0.5 0.13 152); --primary-foreground: oklch(0.99 0 0); --ring: oklch(0.5 0.13 152); }
 
 /* Brighter accent variants so the WUBRG primary stays readable on dark. */
-:root.dark.mtg-white { --primary: oklch(0.8 0.11 90);  --primary-foreground: oklch(0.2 0.03 90);  --ring: oklch(0.8 0.11 90); }
+:root.dark.mtg-white { --primary: oklch(0.9 0.025 95); --primary-foreground: oklch(0.22 0.02 95); --ring: oklch(0.9 0.025 95); }
 :root.dark.mtg-blue  { --primary: oklch(0.7 0.13 248); --primary-foreground: oklch(0.16 0.03 248); --ring: oklch(0.7 0.13 248); }
-:root.dark.mtg-black { --primary: oklch(0.7 0.09 305); --primary-foreground: oklch(0.16 0.03 305); --ring: oklch(0.7 0.09 305); }
+:root.dark.mtg-black { --primary: oklch(0.76 0.01 285); --primary-foreground: oklch(0.17 0.005 285); --ring: oklch(0.76 0.01 285); }
 :root.dark.mtg-red   { --primary: oklch(0.7 0.17 27);  --primary-foreground: oklch(0.16 0.03 27);  --ring: oklch(0.7 0.17 27); }
 :root.dark.mtg-green { --primary: oklch(0.72 0.14 152); --primary-foreground: oklch(0.15 0.03 152); --ring: oklch(0.72 0.14 152); }
 
