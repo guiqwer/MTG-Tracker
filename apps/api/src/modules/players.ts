@@ -18,7 +18,7 @@ export const players = new Elysia({ prefix: '/players' })
         orderBy: { name: 'asc' },
         include: {
           // Never `user: true` — it would leak passwordHash.
-          user: { select: { id: true, username: true } },
+          user: { select: { id: true, username: true, avatarColor: true } },
           _count: { select: { decks: true, participations: true } },
         },
       })

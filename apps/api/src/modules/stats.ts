@@ -50,7 +50,10 @@ export const stats = new Elysia({ prefix: '/stats' })
       }
       const players = await prisma.player.findMany({
         where: { groupId: query.groupId },
-        include: { participations: true },
+        include: {
+          participations: true,
+          user: { select: { username: true, avatarColor: true } },
+        },
       })
       return players
         .map((p) => {
@@ -59,7 +62,8 @@ export const stats = new Elysia({ prefix: '/stats' })
           return {
             id: p.id,
             name: p.name,
-            avatarColor: p.avatarColor,
+            avatarColor: p.user?.avatarColor ?? p.avatarColor,
+            username: p.user?.username ?? null,
             games,
             wins,
             winrate: games ? wins / games : 0,
@@ -128,8 +132,16 @@ export const stats = new Elysia({ prefix: '/stats' })
         prisma.matchEvent.findMany({
           where: { match: { groupId } },
           include: {
-            actor: { include: { player: true } },
-            target: { include: { player: true } },
+            actor: {
+              include: {
+                player: { include: { user: { select: { username: true, avatarColor: true } } } },
+              },
+            },
+            target: {
+              include: {
+                player: { include: { user: { select: { username: true, avatarColor: true } } } },
+              },
+            },
           },
         }),
         prisma.match.findMany({
@@ -137,14 +149,22 @@ export const stats = new Elysia({ prefix: '/stats' })
           orderBy: { playedAt: 'desc' },
           include: {
             participants: {
-              include: { player: true, deck: { include: { commander: true } } },
+              include: {
+                player: { include: { user: { select: { username: true, avatarColor: true } } } },
+                deck: { include: { commander: true } },
+              },
             },
           },
         }),
       ])
 
       // ── Table personalities — who does each thing the most ──────────────
-      type PlayerRef = { id: string; name: string; avatarColor: string | null }
+      type PlayerRef = {
+        id: string
+        name: string
+        avatarColor: string | null
+        user?: { username: string; avatarColor: string | null } | null
+      }
       const tally = (
         rows: { player: PlayerRef | null; weight?: number }[],
       ): { player: PlayerRef; count: number } | null => {
@@ -189,7 +209,8 @@ export const stats = new Elysia({ prefix: '/stats' })
           title: p.title,
           desc: p.desc,
           player: p.top!.player.name,
-          avatarColor: p.top!.player.avatarColor,
+          avatarColor: p.top!.player.user?.avatarColor ?? p.top!.player.avatarColor,
+          username: p.top!.player.user?.username ?? null,
           count: p.top!.count,
         }))
 
@@ -258,7 +279,8 @@ export const stats = new Elysia({ prefix: '/stats' })
         .map((s) => ({
           id: s.player.id,
           name: s.player.name,
-          avatarColor: s.player.avatarColor,
+          avatarColor: s.player.user?.avatarColor ?? s.player.avatarColor,
+          username: s.player.user?.username ?? null,
           games: s.games,
           wins: s.wins,
           top2: s.top2,
@@ -296,7 +318,8 @@ export const stats = new Elysia({ prefix: '/stats' })
           winner: winner
             ? {
                 name: winner.player.name,
-                avatarColor: winner.player.avatarColor,
+                avatarColor: winner.player.user?.avatarColor ?? winner.player.avatarColor,
+                username: winner.player.user?.username ?? null,
                 deck: winner.deck.name,
                 commander: winner.deck.commander?.name ?? null,
               }

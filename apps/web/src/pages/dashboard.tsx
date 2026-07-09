@@ -82,6 +82,7 @@ interface Insights {
     desc: string
     player: string
     avatarColor: string | null
+    username: string | null
     count: number
   }[]
   winConditions: { condition: string; count: number }[]
@@ -91,6 +92,7 @@ interface Insights {
     id: string
     name: string
     avatarColor: string | null
+    username: string | null
     games: number
     wins: number
     top2: number
@@ -108,6 +110,7 @@ interface Insights {
     winner: {
       name: string
       avatarColor: string | null
+      username: string | null
       deck: string
       commander: string | null
     } | null
@@ -293,7 +296,16 @@ export function DashboardPage() {
                     </div>
                     <div className="mt-3 flex items-center gap-2">
                       <Avatar name={p.player} color={p.avatarColor} size={24} />
-                      <span className="min-w-0 flex-1 truncate text-sm font-medium">{p.player}</span>
+                      {p.username ? (
+                        <Link
+                          to={`/app/profile/${p.username}`}
+                          className="min-w-0 flex-1 truncate text-sm font-medium hover:text-primary hover:underline"
+                        >
+                          {p.player}
+                        </Link>
+                      ) : (
+                        <span className="min-w-0 flex-1 truncate text-sm font-medium">{p.player}</span>
+                      )}
                       <Badge variant="secondary" className="tabular-nums">
                         {p.count}
                       </Badge>
@@ -463,7 +475,16 @@ export function DashboardPage() {
                     <span className="flex min-w-0 flex-1 items-center gap-2">
                       <Avatar name={p.name} color={p.avatarColor} size={26} />
                       <span className="min-w-0">
-                        <span className="block truncate font-medium">{p.name}</span>
+                        {p.username ? (
+                          <Link
+                            to={`/app/profile/${p.username}`}
+                            className="block truncate font-medium hover:text-primary hover:underline"
+                          >
+                            {p.name}
+                          </Link>
+                        ) : (
+                          <span className="block truncate font-medium">{p.name}</span>
+                        )}
                         <span className="block text-[11px] tabular-nums text-muted-foreground">
                           {p.games} {p.games === 1 ? 'game' : 'games'}
                         </span>

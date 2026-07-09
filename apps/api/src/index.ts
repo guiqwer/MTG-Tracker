@@ -7,6 +7,7 @@ import { matches } from './modules/matches'
 import { stats } from './modules/stats'
 import { auth } from './modules/auth'
 import { groups } from './modules/groups'
+import { profiles } from './modules/profiles'
 import { checkAuth } from './security/guard'
 
 export const app = new Elysia()
@@ -25,6 +26,7 @@ export const app = new Elysia()
   .get('/health', () => ({ status: 'ok', time: new Date().toISOString() }))
   .use(auth)
   .use(groups)
+  .use(profiles)
   .use(players)
   .use(cards)
   .use(decks)

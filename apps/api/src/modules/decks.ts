@@ -10,7 +10,7 @@ import {
   type ParsedEntry,
 } from '../lib/decklist'
 import { requireUserId } from '../security/tokens'
-import { isMember, FORBIDDEN_GROUP } from '../lib/membership'
+import { isMember, sharedGroupIds, FORBIDDEN_GROUP } from '../lib/membership'
 
 // Never include the raw user relation (it carries passwordHash) — select only
 // what the UI shows.
@@ -44,6 +44,9 @@ async function canAccessDeck(
 ): Promise<boolean> {
   if (deck.userId === userId) return true
   if (deck.owner?.groupId) return isMember(userId, deck.owner.groupId)
+  // Personal decks are visible to people who share a group with the owner
+  // (that's what makes profiles browsable).
+  if (deck.userId) return (await sharedGroupIds(userId, deck.userId)).length > 0
   return false
 }
 

@@ -9,8 +9,19 @@ function publicUser(u: {
   username: string
   email: string
   dateOfBirth: Date
+  avatarColor?: string | null
+  bio?: string | null
+  featuredDeckId?: string | null
 }) {
-  return { id: u.id, username: u.username, email: u.email, dateOfBirth: u.dateOfBirth }
+  return {
+    id: u.id,
+    username: u.username,
+    email: u.email,
+    dateOfBirth: u.dateOfBirth,
+    avatarColor: u.avatarColor ?? null,
+    bio: u.bio ?? null,
+    featuredDeckId: u.featuredDeckId ?? null,
+  }
 }
 
 export const auth = new Elysia({ prefix: '/auth' })
@@ -104,6 +115,42 @@ export const auth = new Elysia({ prefix: '/auth' })
       body: t.Object({
         email: t.String({ minLength: 3, maxLength: 120 }),
         currentPassword: t.String({ minLength: 1 }),
+      }),
+    },
+  )
+  // Profile customization: avatar color, short bio and the featured deck.
+  .patch(
+    '/profile',
+    async ({ headers, body, set }) => {
+      const userId = await requireUserId(headers.authorization)
+      // The featured deck must be one of the caller's own (personal import or
+      // a deck owned by one of their linked players).
+      if (body.featuredDeckId) {
+        const deck = await prisma.deck.findUnique({
+          where: { id: body.featuredDeckId },
+          include: { owner: { select: { userId: true } } },
+        })
+        if (!deck || (deck.userId !== userId && deck.owner?.userId !== userId)) {
+          set.status = 400
+          return { error: 'invalid_deck', error_description: 'Pick one of your own decks' }
+        }
+      }
+      const updated = await prisma.user.update({
+        where: { id: userId },
+        data: {
+          avatarColor: body.avatarColor === undefined ? undefined : body.avatarColor,
+          bio: body.bio === undefined ? undefined : body.bio?.trim() || null,
+          featuredDeckId:
+            body.featuredDeckId === undefined ? undefined : body.featuredDeckId,
+        },
+      })
+      return publicUser(updated)
+    },
+    {
+      body: t.Object({
+        avatarColor: t.Optional(t.Union([t.String({ maxLength: 20 }), t.Null()])),
+        bio: t.Optional(t.Union([t.String({ maxLength: 240 }), t.Null()])),
+        featuredDeckId: t.Optional(t.Union([t.String(), t.Null()])),
       }),
     },
   )

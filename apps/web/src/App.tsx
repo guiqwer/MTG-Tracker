@@ -20,6 +20,7 @@ import { CreateGroupPage } from './pages/group-new'
 import { JoinGroupPage } from './pages/group-join'
 import { GroupDetailPage } from './pages/group-detail'
 import { SettingsPage } from './pages/settings'
+import { ProfilePage } from './pages/profile'
 
 // Gate the app behind a valid session; otherwise send to login.
 function RequireAuth() {
@@ -51,6 +52,7 @@ export function App() {
             <Route path="groups/join" element={<JoinGroupPage />} />
             <Route path="groups/:id" element={<GroupDetailPage />} />
             <Route path="settings" element={<SettingsPage />} />
+            <Route path="profile/:username" element={<ProfilePage />} />
           </Route>
 
           <Route path="*" element={<Navigate to="/" replace />} />

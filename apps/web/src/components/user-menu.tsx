@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { ChevronDown, LogOut, Settings, Users, Plus, LogIn } from 'lucide-react'
+import { ChevronDown, CircleUserRound, LogOut, Settings, Users, Plus, LogIn } from 'lucide-react'
 import { clearToken } from '@/lib/auth'
 import { queryClient } from '@/lib/query'
 import { useMe } from '@/lib/me'
@@ -49,7 +49,7 @@ export function UserMenu() {
         aria-haspopup="menu"
         aria-expanded={open}
       >
-        <Avatar name={username} color={null} size={30} />
+        <Avatar name={username} color={me.data?.avatarColor ?? null} size={30} />
         <span className="hidden max-w-[9rem] truncate sm:inline">{username}</span>
         <ChevronDown
           className={cn(
@@ -71,6 +71,17 @@ export function UserMenu() {
             )}
           </div>
           <div className="p-1.5">
+            {me.data?.username && (
+              <Link
+                to={`/app/profile/${me.data.username}`}
+                role="menuitem"
+                onClick={() => setOpen(false)}
+                className="flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+              >
+                <CircleUserRound className="h-4 w-4 shrink-0" />
+                My profile
+              </Link>
+            )}
             {items.map((item) => (
               <Link
                 key={item.to}

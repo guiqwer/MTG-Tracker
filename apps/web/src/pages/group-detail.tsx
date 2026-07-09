@@ -130,12 +130,17 @@ export function GroupDetailPage() {
             <div className="text-sm font-semibold text-muted-foreground">Members</div>
             <div className="grid gap-2 sm:grid-cols-2">
               {g.members.map((m) => (
-                <Card key={m.userId}>
+                <Card key={m.userId} className="transition-shadow hover:shadow-md">
                   <CardContent className="flex items-center gap-3 p-3.5">
                     <Avatar name={m.username} color={null} size={38} />
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-1.5">
-                        <span className="truncate font-medium">{m.username}</span>
+                        <Link
+                          to={`/app/profile/${m.username}`}
+                          className="truncate font-medium hover:text-primary hover:underline"
+                        >
+                          {m.username}
+                        </Link>
                         {m.isYou && <span className="text-xs text-muted-foreground">(you)</span>}
                       </div>
                       <div className="text-xs text-muted-foreground">

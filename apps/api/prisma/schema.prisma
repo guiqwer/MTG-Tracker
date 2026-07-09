@@ -24,6 +24,11 @@ model User {
   email        String   @unique
   passwordHash String
   dateOfBirth  DateTime
+  // Profile customization (shown to people who share a group).
+  avatarColor  String? // hex, used by the UI for the avatar chip
+  bio          String?
+  featuredDeckId String?
+  featuredDeck   Deck?  @relation("FeaturedDeck", fields: [featuredDeckId], references: [id], onDelete: SetNull)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
@@ -148,6 +153,7 @@ model Deck {
 
   participations MatchParticipant[]
   cards          DeckCard[] // full 100-card list (populated by import)
+  featuredBy     User[]     @relation("FeaturedDeck")
 
   @@index([ownerId])
   @@index([userId])

@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { BadgeCheck, Trash2, UserPlus, Users } from 'lucide-react'
@@ -24,7 +25,7 @@ interface PlayerRow {
   id: string
   name: string
   avatarColor: string | null
-  user: { id: string; username: string } | null
+  user: { id: string; username: string; avatarColor: string | null } | null
   _count: { decks: number; participations: number }
 }
 
@@ -38,10 +39,23 @@ function PlayerCard({
   return (
     <Card className="group transition-shadow hover:shadow-md">
       <CardContent className="flex items-center gap-3 p-3.5">
-        <Avatar name={player.name} color={player.avatarColor} size={40} />
+        <Avatar
+          name={player.name}
+          color={player.user?.avatarColor ?? player.avatarColor}
+          size={40}
+        />
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5">
-            <span className="truncate font-medium">{player.name}</span>
+            {player.user ? (
+              <Link
+                to={`/app/profile/${player.user.username}`}
+                className="truncate font-medium hover:text-primary hover:underline"
+              >
+                {player.name}
+              </Link>
+            ) : (
+              <span className="truncate font-medium">{player.name}</span>
+            )}
             {player.user && (
               <Badge variant="success" className="shrink-0 px-1.5 py-0 text-[10px]">
                 <BadgeCheck className="h-3 w-3" /> member
