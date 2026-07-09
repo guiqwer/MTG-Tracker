@@ -4,7 +4,7 @@ import { hashPassword } from './security/passwords'
 
 async function main() {
   // Demo login account (idempotent) — username: demo · password: password12
-  await prisma.user.upsert({
+  const demo = await prisma.user.upsert({
     where: { username: 'demo' },
     update: {},
     create: {
@@ -13,6 +13,19 @@ async function main() {
       passwordHash: await hashPassword('password12'),
       dateOfBirth: new Date('1995-05-05'),
     },
+  })
+
+  // Demo group (idempotent via its fixed invite code) with demo as its owner —
+  // share code "DEMOPOD" to test joining from a second account.
+  const demoGroup = await prisma.group.upsert({
+    where: { inviteCode: 'DEMOPOD' },
+    update: {},
+    create: { name: 'Demo Pod', inviteCode: 'DEMOPOD' },
+  })
+  await prisma.groupMembership.upsert({
+    where: { groupId_userId: { groupId: demoGroup.id, userId: demo.id } },
+    update: {},
+    create: { groupId: demoGroup.id, userId: demo.id, role: 'OWNER' },
   })
 
   const roster = [

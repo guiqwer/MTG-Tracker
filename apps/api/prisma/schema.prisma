@@ -27,7 +27,40 @@ model User {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
+  memberships GroupMembership[]
+
   @@map("users")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Groups (playgroups / pods) — gym-rats style: one person creates a group and
+// shares its invite code; others join with it. A user can belong to many groups.
+// ─────────────────────────────────────────────────────────────────────────────
+
+model Group {
+  id         String   @id @default(cuid())
+  name       String
+  inviteCode String   @unique // short, shareable code others use to join
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  memberships GroupMembership[]
+
+  @@map("groups")
+}
+
+model GroupMembership {
+  id       String    @id @default(cuid())
+  groupId  String
+  group    Group     @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  userId   String
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role     GroupRole @default(MEMBER)
+  joinedAt DateTime  @default(now())
+
+  @@unique([groupId, userId]) // one membership per user per group
+  @@index([userId])
+  @@map("group_memberships")
 }
 
 model Player {
@@ -217,4 +250,9 @@ enum EndReason {
   TIME_CALLED
   CONCESSION
   DRAW
+}
+
+enum GroupRole {
+  OWNER
+  MEMBER
 }

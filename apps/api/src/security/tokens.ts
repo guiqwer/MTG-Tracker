@@ -52,3 +52,12 @@ export function readBearerToken(header?: string): string | null {
   const [scheme, value] = header.split(' ')
   return scheme?.toLowerCase() === 'bearer' && value ? value : null
 }
+
+// Resolve the caller's user id from the Authorization header. The global guard
+// has already verified the token; handlers that need to know *who* is calling
+// use this instead of re-implementing the decode each time. Throws if the token
+// is missing/invalid (which the guard should already have prevented).
+export async function requireUserId(authorization?: string): Promise<string> {
+  const claims = await verifyAccessToken(readBearerToken(authorization) ?? '')
+  return String(claims.sub)
+}

@@ -1,7 +1,8 @@
 import { Elysia, t } from 'elysia'
 import { prisma } from '../lib/prisma'
 import { hashPassword, verifyPassword } from '../security/passwords'
-import { readBearerToken, signAccessToken, verifyAccessToken } from '../security/tokens'
+import { requireUserId, signAccessToken } from '../security/tokens'
+import { isUniqueViolation } from '../lib/prisma-errors'
 
 function publicUser(u: {
   id: string
@@ -66,7 +67,66 @@ export const auth = new Elysia({ prefix: '/auth' })
   )
   // Current user — reached only with a valid token (the global guard enforces it).
   .get('/me', async ({ headers }) => {
-    const claims = await verifyAccessToken(readBearerToken(headers.authorization) ?? '')
-    const user = await prisma.user.findUnique({ where: { id: String(claims.sub) } })
+    const userId = await requireUserId(headers.authorization)
+    const user = await prisma.user.findUnique({ where: { id: userId } })
     return user ? publicUser(user) : null
   })
+  // Change email — re-authenticated with the current password (sensitive change).
+  .patch(
+    '/email',
+    async ({ headers, body, set }) => {
+      const userId = await requireUserId(headers.authorization)
+      const user = await prisma.user.findUnique({ where: { id: userId } })
+      if (!user || !(await verifyPassword(body.currentPassword, user.passwordHash))) {
+        set.status = 401
+        return { error: 'invalid_credentials', error_description: 'Current password is incorrect' }
+      }
+      const email = body.email.trim().toLowerCase()
+      const taken = await prisma.user.findFirst({ where: { email, NOT: { id: userId } } })
+      if (taken) {
+        set.status = 409
+        return { error: 'email_taken', error_description: 'That email is already in use' }
+      }
+      // The email @unique constraint is the real backstop against a concurrent
+      // change racing to the same address.
+      try {
+        const updated = await prisma.user.update({ where: { id: userId }, data: { email } })
+        return publicUser(updated)
+      } catch (e) {
+        if (isUniqueViolation(e)) {
+          set.status = 409
+          return { error: 'email_taken', error_description: 'That email is already in use' }
+        }
+        throw e
+      }
+    },
+    {
+      body: t.Object({
+        email: t.String({ minLength: 3, maxLength: 120 }),
+        currentPassword: t.String({ minLength: 1 }),
+      }),
+    },
+  )
+  // Change password — requires the current password, then re-hashes (argon2id).
+  .patch(
+    '/password',
+    async ({ headers, body, set }) => {
+      const userId = await requireUserId(headers.authorization)
+      const user = await prisma.user.findUnique({ where: { id: userId } })
+      if (!user || !(await verifyPassword(body.currentPassword, user.passwordHash))) {
+        set.status = 401
+        return { error: 'invalid_credentials', error_description: 'Current password is incorrect' }
+      }
+      await prisma.user.update({
+        where: { id: userId },
+        data: { passwordHash: await hashPassword(body.newPassword) },
+      })
+      return { ok: true }
+    },
+    {
+      body: t.Object({
+        currentPassword: t.String({ minLength: 1 }),
+        newPassword: t.String({ minLength: 8, maxLength: 128 }),
+      }),
+    },
+  )

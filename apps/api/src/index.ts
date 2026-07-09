@@ -6,6 +6,7 @@ import { decks } from './modules/decks'
 import { matches } from './modules/matches'
 import { stats } from './modules/stats'
 import { auth } from './modules/auth'
+import { groups } from './modules/groups'
 import { checkAuth } from './security/guard'
 
 export const app = new Elysia()
@@ -23,6 +24,7 @@ export const app = new Elysia()
   .get('/', () => ({ name: 'Magic Match Tracker API', status: 'ok' }))
   .get('/health', () => ({ status: 'ok', time: new Date().toISOString() }))
   .use(auth)
+  .use(groups)
   .use(players)
   .use(cards)
   .use(decks)

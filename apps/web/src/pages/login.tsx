@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 import { api } from '@/lib/eden'
 import { setToken } from '@/lib/auth'
+import { queryClient } from '@/lib/query'
 import { AuthShell } from '@/components/auth-shell'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -21,6 +22,8 @@ export function LoginPage() {
       const { data, error } = await api.auth.login.post({ identifier, password })
       if (error || !data?.token) throw error ?? new Error('no token')
       setToken(data.token)
+      // Start from a clean cache so no prior account's data lingers.
+      queryClient.clear()
       navigate('/app')
     } catch {
       toast.error('Invalid username/email or password')

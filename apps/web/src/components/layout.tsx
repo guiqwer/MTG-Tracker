@@ -1,7 +1,7 @@
-import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom'
-import { LayoutDashboard, Users, Layers, Swords, LogOut } from 'lucide-react'
+import { Link, NavLink, Outlet } from 'react-router-dom'
+import { LayoutDashboard, Users, Layers, Swords } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { clearToken } from '@/lib/auth'
+import { UserMenu } from '@/components/user-menu'
 
 const nav = [
   { to: '/app', label: 'Dashboard', icon: LayoutDashboard, end: true },
@@ -11,7 +11,6 @@ const nav = [
 ]
 
 export function Layout() {
-  const navigate = useNavigate()
   return (
     <div className="min-h-dvh">
       <header className="sticky top-0 z-30 border-b border-border/70 bg-background/80 backdrop-blur-md">
@@ -47,18 +46,7 @@ export function Layout() {
             ))}
           </nav>
 
-          <button
-            type="button"
-            onClick={() => {
-              clearToken()
-              navigate('/login')
-            }}
-            className="ml-auto flex items-center gap-2 rounded-lg px-2.5 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground sm:px-3"
-            title="Log out"
-          >
-            <LogOut className="h-4 w-4 shrink-0" />
-            <span className="hidden sm:inline">Log out</span>
-          </button>
+          <UserMenu />
         </div>
       </header>
 

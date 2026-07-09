@@ -12,6 +12,11 @@ import { PlayersPage } from './pages/players'
 import { DecksPage } from './pages/decks'
 import { MatchesPage } from './pages/matches'
 import { MatchDetailPage } from './pages/match-detail'
+import { GroupsPage } from './pages/groups'
+import { CreateGroupPage } from './pages/group-new'
+import { JoinGroupPage } from './pages/group-join'
+import { GroupDetailPage } from './pages/group-detail'
+import { SettingsPage } from './pages/settings'
 
 // Gate the app behind a valid session; otherwise send to login.
 function RequireAuth() {
@@ -35,6 +40,11 @@ export function App() {
             <Route path="decks" element={<DecksPage />} />
             <Route path="matches" element={<MatchesPage />} />
             <Route path="matches/:id" element={<MatchDetailPage />} />
+            <Route path="groups" element={<GroupsPage />} />
+            <Route path="groups/new" element={<CreateGroupPage />} />
+            <Route path="groups/join" element={<JoinGroupPage />} />
+            <Route path="groups/:id" element={<GroupDetailPage />} />
+            <Route path="settings" element={<SettingsPage />} />
           </Route>
 
           <Route path="*" element={<Navigate to="/" replace />} />
