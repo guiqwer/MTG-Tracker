@@ -52,7 +52,7 @@ export const stats = new Elysia({ prefix: '/stats' })
         where: { groupId: query.groupId },
         include: {
           participations: true,
-          user: { select: { username: true, avatarColor: true } },
+          user: { select: { id: true, username: true, avatarColor: true } },
         },
       })
       return players
@@ -63,7 +63,7 @@ export const stats = new Elysia({ prefix: '/stats' })
             id: p.id,
             name: p.name,
             avatarColor: p.user?.avatarColor ?? p.avatarColor,
-            username: p.user?.username ?? null,
+            userId: p.user?.id ?? null,
             games,
             wins,
             winrate: games ? wins / games : 0,
@@ -134,12 +134,12 @@ export const stats = new Elysia({ prefix: '/stats' })
           include: {
             actor: {
               include: {
-                player: { include: { user: { select: { username: true, avatarColor: true } } } },
+                player: { include: { user: { select: { id: true, username: true, avatarColor: true } } } },
               },
             },
             target: {
               include: {
-                player: { include: { user: { select: { username: true, avatarColor: true } } } },
+                player: { include: { user: { select: { id: true, username: true, avatarColor: true } } } },
               },
             },
           },
@@ -150,7 +150,7 @@ export const stats = new Elysia({ prefix: '/stats' })
           include: {
             participants: {
               include: {
-                player: { include: { user: { select: { username: true, avatarColor: true } } } },
+                player: { include: { user: { select: { id: true, username: true, avatarColor: true } } } },
                 deck: { include: { commander: true } },
               },
             },
@@ -163,7 +163,7 @@ export const stats = new Elysia({ prefix: '/stats' })
         id: string
         name: string
         avatarColor: string | null
-        user?: { username: string; avatarColor: string | null } | null
+        user?: { id: string; username: string; avatarColor: string | null } | null
       }
       const tally = (
         rows: { player: PlayerRef | null; weight?: number }[],
@@ -210,7 +210,7 @@ export const stats = new Elysia({ prefix: '/stats' })
           desc: p.desc,
           player: p.top!.player.name,
           avatarColor: p.top!.player.user?.avatarColor ?? p.top!.player.avatarColor,
-          username: p.top!.player.user?.username ?? null,
+          userId: p.top!.player.user?.id ?? null,
           count: p.top!.count,
         }))
 
@@ -280,7 +280,7 @@ export const stats = new Elysia({ prefix: '/stats' })
           id: s.player.id,
           name: s.player.name,
           avatarColor: s.player.user?.avatarColor ?? s.player.avatarColor,
-          username: s.player.user?.username ?? null,
+          userId: s.player.user?.id ?? null,
           games: s.games,
           wins: s.wins,
           top2: s.top2,
@@ -319,7 +319,7 @@ export const stats = new Elysia({ prefix: '/stats' })
             ? {
                 name: winner.player.name,
                 avatarColor: winner.player.user?.avatarColor ?? winner.player.avatarColor,
-                username: winner.player.user?.username ?? null,
+                userId: winner.player.user?.id ?? null,
                 deck: winner.deck.name,
                 commander: winner.deck.commander?.name ?? null,
               }

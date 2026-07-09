@@ -50,10 +50,10 @@ export function SettingsPage() {
 
   // Candidate featured decks come from the caller's own profile.
   const myProfile = useQuery({
-    queryKey: ['profile', me.data?.username],
-    enabled: !!me.data?.username,
+    queryKey: ['profile', me.data?.id],
+    enabled: !!me.data?.id,
     queryFn: async () => {
-      const { data, error } = await api.profiles({ username: me.data!.username }).get()
+      const { data, error } = await api.profiles({ id: me.data!.id }).get()
       if (error) throw error
       return data && 'error' in data
         ? null

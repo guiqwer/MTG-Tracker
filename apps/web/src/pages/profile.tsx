@@ -69,12 +69,12 @@ function StatBox({ label, value }: { label: string; value: string }) {
 }
 
 export function ProfilePage() {
-  const { username = '' } = useParams()
+  const { id = '' } = useParams()
 
   const profile = useQuery({
-    queryKey: ['profile', username],
+    queryKey: ['profile', id],
     queryFn: async (): Promise<ProfileData | null> => {
-      const { data, error } = await api.profiles({ username }).get()
+      const { data, error } = await api.profiles({ id }).get()
       if (error) throw error
       return data && 'error' in data ? null : (data as unknown as ProfileData)
     },

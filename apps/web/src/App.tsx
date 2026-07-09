@@ -52,7 +52,7 @@ export function App() {
             <Route path="groups/join" element={<JoinGroupPage />} />
             <Route path="groups/:id" element={<GroupDetailPage />} />
             <Route path="settings" element={<SettingsPage />} />
-            <Route path="profile/:username" element={<ProfilePage />} />
+            <Route path="profile/:id" element={<ProfilePage />} />
           </Route>
 
           <Route path="*" element={<Navigate to="/" replace />} />

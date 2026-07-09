@@ -82,7 +82,7 @@ interface Insights {
     desc: string
     player: string
     avatarColor: string | null
-    username: string | null
+    userId: string | null
     count: number
   }[]
   winConditions: { condition: string; count: number }[]
@@ -92,7 +92,7 @@ interface Insights {
     id: string
     name: string
     avatarColor: string | null
-    username: string | null
+    userId: string | null
     games: number
     wins: number
     top2: number
@@ -110,7 +110,7 @@ interface Insights {
     winner: {
       name: string
       avatarColor: string | null
-      username: string | null
+      userId: string | null
       deck: string
       commander: string | null
     } | null
@@ -296,9 +296,9 @@ export function DashboardPage() {
                     </div>
                     <div className="mt-3 flex items-center gap-2">
                       <Avatar name={p.player} color={p.avatarColor} size={24} />
-                      {p.username ? (
+                      {p.userId ? (
                         <Link
-                          to={`/app/profile/${p.username}`}
+                          to={`/app/profile/${p.userId}`}
                           className="min-w-0 flex-1 truncate text-sm font-medium hover:text-primary hover:underline"
                         >
                           {p.player}
@@ -475,9 +475,9 @@ export function DashboardPage() {
                     <span className="flex min-w-0 flex-1 items-center gap-2">
                       <Avatar name={p.name} color={p.avatarColor} size={26} />
                       <span className="min-w-0">
-                        {p.username ? (
+                        {p.userId ? (
                           <Link
-                            to={`/app/profile/${p.username}`}
+                            to={`/app/profile/${p.userId}`}
                             className="block truncate font-medium hover:text-primary hover:underline"
                           >
                             {p.name}

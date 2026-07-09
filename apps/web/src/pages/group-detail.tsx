@@ -136,7 +136,7 @@ export function GroupDetailPage() {
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-1.5">
                         <Link
-                          to={`/app/profile/${m.username}`}
+                          to={`/app/profile/${m.userId}`}
                           className="truncate font-medium hover:text-primary hover:underline"
                         >
                           {m.username}

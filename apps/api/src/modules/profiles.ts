@@ -28,12 +28,13 @@ const safeDeck = {
 } as const
 
 export const profiles = new Elysia({ prefix: '/profiles' })
-  // A member's profile. Visible to themselves and to anyone sharing a group;
-  // every number aggregates ONLY the groups viewer and profile have in common.
-  .get('/:username', async ({ headers, params, set }) => {
+  // A member's profile, addressed by opaque user id (no usernames in URLs).
+  // Visible to themselves and to anyone sharing a group; every number
+  // aggregates ONLY the groups viewer and profile have in common.
+  .get('/:id', async ({ headers, params, set }) => {
     const viewerId = await requireUserId(headers.authorization)
     const user = await prisma.user.findUnique({
-      where: { username: params.username },
+      where: { id: params.id },
       include: { featuredDeck: { include: safeDeck } },
     })
     if (!user) {

@@ -48,7 +48,7 @@ function PlayerCard({
           <div className="flex items-center gap-1.5">
             {player.user ? (
               <Link
-                to={`/app/profile/${player.user.username}`}
+                to={`/app/profile/${player.user.id}`}
                 className="truncate font-medium hover:text-primary hover:underline"
               >
                 {player.name}

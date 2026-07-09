@@ -71,9 +71,9 @@ export function UserMenu() {
             )}
           </div>
           <div className="p-1.5">
-            {me.data?.username && (
+            {me.data?.id && (
               <Link
-                to={`/app/profile/${me.data.username}`}
+                to={`/app/profile/${me.data.id}`}
                 role="menuitem"
                 onClick={() => setOpen(false)}
                 className="flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
