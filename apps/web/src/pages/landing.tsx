@@ -126,8 +126,12 @@ export function LandingPage() {
           aria-hidden
           className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[680px]"
         >
-          <img src={backdrop} alt="" className="h-full w-full object-cover opacity-[0.14]" />
-          <div className="absolute inset-0 bg-gradient-to-b from-background/20 via-background/70 to-background" />
+          <img
+            src={backdrop}
+            alt=""
+            className="h-full w-full object-cover opacity-[0.30] dark:opacity-[0.22]"
+          />
+          <div className="absolute inset-0 bg-gradient-to-b from-background/10 via-background/55 to-background" />
         </div>
 
       {/* Hero */}
