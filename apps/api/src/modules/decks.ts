@@ -1,6 +1,6 @@
 import { Elysia, t } from 'elysia'
 import { prisma } from '../lib/prisma'
-import { importCard, upsertCard } from '../lib/cards'
+import { importCard } from '../lib/cards'
 import { fetchCollection, type CardIdentifier, type ScryfallCard } from '../lib/scryfall'
 import {
   fetchMoxfieldDeck,
@@ -71,11 +71,27 @@ async function resolveEntries(entries: ParsedEntry[]) {
     byKey.set(c.name.split(' // ')[0].toLowerCase(), c)
   }
 
-  const stored = new Map<string, { id: string; colorIdentity: string[] }>()
-  for (const c of cards) {
-    const row = await upsertCard(c)
-    stored.set(c.scryfallId, { id: row.id, colorIdentity: row.colorIdentity })
+  // Bulk-store: one read for what we already have, one createMany for the
+  // rest, one re-read — 3 queries instead of one upsert per card.
+  const scryfallIds = cards.map((c) => c.scryfallId)
+  const cardSelect = { id: true, scryfallId: true, colorIdentity: true } as const
+  const existing = await prisma.card.findMany({
+    where: { scryfallId: { in: scryfallIds } },
+    select: cardSelect,
+  })
+  const known = new Set(existing.map((e) => e.scryfallId))
+  const missing = cards.filter((c) => !known.has(c.scryfallId))
+  let rows = existing
+  if (missing.length > 0) {
+    await prisma.card.createMany({ data: missing, skipDuplicates: true })
+    rows = await prisma.card.findMany({
+      where: { scryfallId: { in: scryfallIds } },
+      select: cardSelect,
+    })
   }
+  const stored = new Map(
+    rows.map((r) => [r.scryfallId, { id: r.id, colorIdentity: r.colorIdentity }]),
+  )
 
   const lookup = (e: ParsedEntry) => {
     const sc = e.scryfallId
@@ -95,9 +111,16 @@ export const decks = new Elysia({ prefix: '/decks' })
         set.status = 403
         return FORBIDDEN_GROUP
       }
+      // Group decks (owned by a table player) + personal decks that members
+      // brought with their account — everyone at the table can browse both.
       return withCardCounts(
         await prisma.deck.findMany({
-          where: { owner: { groupId: query.groupId } },
+          where: {
+            OR: [
+              { owner: { groupId: query.groupId } },
+              { user: { memberships: { some: { groupId: query.groupId } } } },
+            ],
+          },
           orderBy: { createdAt: 'desc' },
           include: deckInclude,
         }),

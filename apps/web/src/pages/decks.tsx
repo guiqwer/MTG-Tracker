@@ -5,6 +5,7 @@ import { toast } from 'sonner'
 import { Download, Layers, Link2, Plus, Search, User, X } from 'lucide-react'
 import { api } from '@/lib/eden'
 import { useActiveGroup } from '@/lib/group'
+import { useMe } from '@/lib/me'
 import { PageHeader } from '@/components/page-header'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -31,6 +32,7 @@ export function DecksPage() {
   // RequireGroup guarantees an active group when this page renders.
   const { activeGroup } = useActiveGroup()
   const groupId = activeGroup!.id
+  const me = useMe()
   const [open, setOpen] = useState(false)
   const [name, setName] = useState('')
   const [ownerId, setOwnerId] = useState('')
@@ -420,9 +422,11 @@ export function DecksPage() {
         />
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {decks.data.map((d) => (
-            <DeckCard key={d.id} deck={d} onDelete={(id) => remove.mutate(id)} />
-          ))}
+          {decks.data
+            .filter((d) => d.owner || d.user?.id !== me.data?.id)
+            .map((d) => (
+              <DeckCard key={d.id} deck={d} onDelete={(id) => remove.mutate(id)} />
+            ))}
         </div>
       )}
     </div>

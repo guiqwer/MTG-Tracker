@@ -27,15 +27,19 @@ async function main() {
   }
 
   // Backfill: every group member has a linked player ("member = player").
-  const memberships = await prisma.groupMembership.findMany({
-    select: { groupId: true, userId: true },
-  })
+  // Set-based: two reads to find the gaps, then create only what's missing.
+  const [memberships, linked] = await Promise.all([
+    prisma.groupMembership.findMany({ select: { groupId: true, userId: true } }),
+    prisma.player.findMany({
+      where: { userId: { not: null } },
+      select: { groupId: true, userId: true },
+    }),
+  ])
+  const have = new Set(linked.map((l) => `${l.groupId}:${l.userId}`))
   let created = 0
   for (const m of memberships) {
-    const existing = await prisma.player.findUnique({
-      where: { groupId_userId: { groupId: m.groupId, userId: m.userId } },
-    })
-    if (!existing && (await ensureMemberPlayer(m.groupId, m.userId))) created++
+    if (have.has(`${m.groupId}:${m.userId}`)) continue
+    if (await ensureMemberPlayer(m.groupId, m.userId)) created++
   }
   if (created > 0) console.log(`Backfill: created ${created} member player(s).`)
 }

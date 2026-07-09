@@ -117,17 +117,26 @@ export const profiles = new Elysia({ prefix: '/profiles' })
     const favoriteCommander =
       [...byCommander.values()].sort((a, b) => b.games - a.games)[0] ?? null
 
-    // Personality titles from the event log (acting + being targeted).
-    const events = await prisma.matchEvent.findMany({
-      where: { match: { groupId: { in: scope } } },
-      select: {
-        type: true,
-        actor: { select: { playerId: true } },
-        target: { select: { playerId: true } },
-        actorId: true,
-        targetId: true,
-      },
-    })
+    // Personality titles from the event log (acting + being targeted) —
+    // filtered in the database, not in memory.
+    const events = playerIds.length
+      ? await prisma.matchEvent.findMany({
+          where: {
+            match: { groupId: { in: scope } },
+            OR: [
+              { actor: { playerId: { in: playerIds } } },
+              { target: { playerId: { in: playerIds } } },
+            ],
+          },
+          select: {
+            type: true,
+            actor: { select: { playerId: true } },
+            target: { select: { playerId: true } },
+            actorId: true,
+            targetId: true,
+          },
+        })
+      : []
     const idSet = new Set(playerIds)
     const typeCounts = new Map<string, number>()
     let targeted = 0

@@ -170,8 +170,18 @@ export function MatchesPage() {
 
   const setRow = (i: number, patch: Partial<Row>) =>
     setRows((prev) => prev.map((r, idx) => (idx === i ? { ...r, ...patch } : r)))
-  const decksByOwner = (ownerId: string) =>
-    decks.data?.filter((d) => d.ownerId === ownerId) ?? []
+  // A seat can play the player's table decks plus the personal decks of the
+  // account behind that seat (members bring their imports to any table).
+  const decksByOwner = (ownerId: string) => {
+    const player = players.data?.find((p) => p.id === ownerId)
+    return (
+      decks.data?.filter(
+        (d) =>
+          d.ownerId === ownerId ||
+          (!d.ownerId && player?.user && d.user?.id === player.user.id),
+      ) ?? []
+    )
+  }
   const validRows = rows.filter((r) => r.playerId && r.deckId).length
 
   return (
@@ -213,15 +223,19 @@ export function MatchesPage() {
                         {d.name}
                       </option>
                     ))}
-                    {(myDecks.data?.length ?? 0) > 0 && (
-                      <optgroup label="My decks (imported)">
-                        {myDecks.data!.map((d) => (
-                          <option key={d.id} value={d.id}>
-                            {d.name}
-                          </option>
-                        ))}
-                      </optgroup>
-                    )}
+                    {(() => {
+                      const offered = new Set(decksByOwner(r.playerId).map((d) => d.id))
+                      const extras = myDecks.data?.filter((d) => !offered.has(d.id)) ?? []
+                      return extras.length > 0 ? (
+                        <optgroup label="My decks (imported)">
+                          {extras.map((d) => (
+                            <option key={d.id} value={d.id}>
+                              {d.name}
+                            </option>
+                          ))}
+                        </optgroup>
+                      ) : null
+                    })()}
                   </select>
                   <Input
                     type="number"
