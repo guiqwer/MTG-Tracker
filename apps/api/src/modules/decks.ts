@@ -1,6 +1,8 @@
 import { Elysia, t } from 'elysia'
 import { prisma } from '../lib/prisma'
 import { importCard } from '../lib/cards'
+import { requireUserId } from '../security/tokens'
+import { isMember, FORBIDDEN_GROUP } from '../lib/membership'
 
 const deckInclude = {
   owner: true,
@@ -9,16 +11,43 @@ const deckInclude = {
   _count: { select: { participations: true } },
 } as const
 
+// A deck's group is its owner's group — decks don't carry their own groupId.
 export const decks = new Elysia({ prefix: '/decks' })
-  .get('/', () =>
-    prisma.deck.findMany({ orderBy: { createdAt: 'desc' }, include: deckInclude }),
+  .get(
+    '/',
+    async ({ headers, query, set }) => {
+      const userId = await requireUserId(headers.authorization)
+      if (!(await isMember(userId, query.groupId))) {
+        set.status = 403
+        return FORBIDDEN_GROUP
+      }
+      return prisma.deck.findMany({
+        where: { owner: { groupId: query.groupId } },
+        orderBy: { createdAt: 'desc' },
+        include: deckInclude,
+      })
+    },
+    { query: t.Object({ groupId: t.String() }) },
   )
-  .get('/:id', ({ params }) =>
-    prisma.deck.findUnique({ where: { id: params.id }, include: deckInclude }),
-  )
+  .get('/:id', async ({ headers, params, set }) => {
+    const userId = await requireUserId(headers.authorization)
+    const deck = await prisma.deck.findUnique({ where: { id: params.id }, include: deckInclude })
+    if (!deck?.owner.groupId || !(await isMember(userId, deck.owner.groupId))) {
+      set.status = 404
+      return { error: 'not_found', error_description: 'Deck not found' }
+    }
+    return deck
+  })
   .post(
     '/',
-    async ({ body }) => {
+    async ({ headers, body, set }) => {
+      // The caller must be in the owner player's group.
+      const userId = await requireUserId(headers.authorization)
+      const owner = await prisma.player.findUnique({ where: { id: body.ownerId } })
+      if (!owner?.groupId || !(await isMember(userId, owner.groupId))) {
+        set.status = 403
+        return FORBIDDEN_GROUP
+      }
       // Resolve commander / partner from Scryfall (upserted into our Card table).
       const commander = body.commanderScryfallId
         ? await importCard(body.commanderScryfallId)
@@ -63,4 +92,15 @@ export const decks = new Elysia({ prefix: '/decks' })
       }),
     },
   )
-  .delete('/:id', ({ params }) => prisma.deck.delete({ where: { id: params.id } }))
+  .delete('/:id', async ({ headers, params, set }) => {
+    const userId = await requireUserId(headers.authorization)
+    const deck = await prisma.deck.findUnique({
+      where: { id: params.id },
+      include: { owner: true },
+    })
+    if (!deck?.owner.groupId || !(await isMember(userId, deck.owner.groupId))) {
+      set.status = 404
+      return { error: 'not_found', error_description: 'Deck not found' }
+    }
+    return prisma.deck.delete({ where: { id: params.id } })
+  })

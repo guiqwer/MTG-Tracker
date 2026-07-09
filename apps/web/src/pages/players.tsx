@@ -4,6 +4,7 @@ import { toast } from 'sonner'
 import { Trash2, UserPlus, Users } from 'lucide-react'
 import { api } from '@/lib/eden'
 import { cn } from '@/lib/utils'
+import { useActiveGroup } from '@/lib/group'
 import { PageHeader } from '@/components/page-header'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -20,23 +21,26 @@ const SWATCHES = [
 
 export function PlayersPage() {
   const qc = useQueryClient()
+  // RequireGroup guarantees an active group when this page renders.
+  const { activeGroup } = useActiveGroup()
+  const groupId = activeGroup!.id
   const [name, setName] = useState('')
   const [color, setColor] = useState(SWATCHES[0])
 
   const players = useQuery({
-    queryKey: ['players'],
+    queryKey: ['players', groupId],
     queryFn: async () => {
-      const { data, error } = await api.players.get()
+      const { data, error } = await api.players.get({ query: { groupId } })
       if (error) throw error
-      return data
+      return data && 'error' in data ? null : data
     },
   })
 
   const create = useMutation({
     mutationFn: async () => {
-      const { data, error } = await api.players.post({ name, avatarColor: color })
+      const { data, error } = await api.players.post({ name, avatarColor: color, groupId })
       if (error) throw error
-      return data
+      return data && 'error' in data ? null : data
     },
     onSuccess: (d) => {
       toast.success(`Player "${d?.name}" added`)

@@ -4,6 +4,7 @@ import { Toaster } from 'sonner'
 import { queryClient } from './lib/query'
 import { isAuthenticated } from './lib/auth'
 import { Layout } from './components/layout'
+import { RequireGroup } from './components/require-group'
 import { LandingPage } from './pages/landing'
 import { LoginPage } from './pages/login'
 import { SignupPage } from './pages/signup'
@@ -35,11 +36,11 @@ export function App() {
 
           {/* App (requires login) */}
           <Route path="/app" element={<RequireAuth />}>
-            <Route index element={<DashboardPage />} />
-            <Route path="players" element={<PlayersPage />} />
-            <Route path="decks" element={<DecksPage />} />
-            <Route path="matches" element={<MatchesPage />} />
-            <Route path="matches/:id" element={<MatchDetailPage />} />
+            <Route index element={<RequireGroup><DashboardPage /></RequireGroup>} />
+            <Route path="players" element={<RequireGroup><PlayersPage /></RequireGroup>} />
+            <Route path="decks" element={<RequireGroup><DecksPage /></RequireGroup>} />
+            <Route path="matches" element={<RequireGroup><MatchesPage /></RequireGroup>} />
+            <Route path="matches/:id" element={<RequireGroup><MatchDetailPage /></RequireGroup>} />
             <Route path="groups" element={<GroupsPage />} />
             <Route path="groups/new" element={<CreateGroupPage />} />
             <Route path="groups/join" element={<JoinGroupPage />} />

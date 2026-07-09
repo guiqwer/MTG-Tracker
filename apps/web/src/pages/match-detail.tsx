@@ -85,7 +85,7 @@ export function MatchDetailPage() {
     queryFn: async () => {
       const { data, error } = await api.matches({ id: matchId }).get()
       if (error) throw error
-      return data
+      return data && 'error' in data ? null : data
     },
   })
 
@@ -124,7 +124,7 @@ export function MatchDetailPage() {
         note: note || undefined,
       })
       if (error) throw error
-      return data
+      return data && 'error' in data ? null : data
     },
     onSuccess: () => {
       toast.success('Event added to timeline')

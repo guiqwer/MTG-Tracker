@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { Layers, Plus, Search, X } from 'lucide-react'
 import { api } from '@/lib/eden'
+import { useActiveGroup } from '@/lib/group'
 import { PageHeader } from '@/components/page-header'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -25,6 +26,9 @@ const selectCls =
 
 export function DecksPage() {
   const qc = useQueryClient()
+  // RequireGroup guarantees an active group when this page renders.
+  const { activeGroup } = useActiveGroup()
+  const groupId = activeGroup!.id
   const [open, setOpen] = useState(false)
   const [name, setName] = useState('')
   const [ownerId, setOwnerId] = useState('')
@@ -34,19 +38,19 @@ export function DecksPage() {
   const [commander, setCommander] = useState<CommanderPick | null>(null)
 
   const players = useQuery({
-    queryKey: ['players'],
+    queryKey: ['players', groupId],
     queryFn: async () => {
-      const { data, error } = await api.players.get()
+      const { data, error } = await api.players.get({ query: { groupId } })
       if (error) throw error
-      return data
+      return data && 'error' in data ? null : data
     },
   })
   const decks = useQuery({
-    queryKey: ['decks'],
+    queryKey: ['decks', groupId],
     queryFn: async () => {
-      const { data, error } = await api.decks.get()
+      const { data, error } = await api.decks.get({ query: { groupId } })
       if (error) throw error
-      return data
+      return data && 'error' in data ? null : data
     },
   })
   const search = useQuery({
@@ -80,7 +84,7 @@ export function DecksPage() {
         powerLevel: powerLevel ? Number(powerLevel) : undefined,
       })
       if (error) throw error
-      return data
+      return data && 'error' in data ? null : data
     },
     onSuccess: (d) => {
       toast.success(`Deck "${d?.name}" created`)

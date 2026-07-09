@@ -28,6 +28,17 @@ async function main() {
     create: { groupId: demoGroup.id, userId: demo.id, role: 'OWNER' },
   })
 
+  // Backfill: attach any pre-group rows to the demo group so nothing vanishes
+  // from the UI after the group-scoping migration.
+  await prisma.player.updateMany({
+    where: { groupId: null },
+    data: { groupId: demoGroup.id },
+  })
+  await prisma.match.updateMany({
+    where: { groupId: null },
+    data: { groupId: demoGroup.id },
+  })
+
   const roster = [
     { name: 'Alex', color: '#7c3aed' },
     { name: 'Sam', color: '#0ea5e9' },
@@ -39,9 +50,9 @@ async function main() {
   for (const r of roster) {
     players.push(
       await prisma.player.upsert({
-        where: { name: r.name },
+        where: { groupId_name: { groupId: demoGroup.id, name: r.name } },
         update: {},
-        create: { name: r.name, avatarColor: r.color },
+        create: { name: r.name, avatarColor: r.color, groupId: demoGroup.id },
       }),
     )
   }
@@ -83,6 +94,7 @@ async function main() {
 
   const match = await prisma.match.create({
     data: {
+      groupId: demoGroup.id,
       durationMins: 75,
       turns: 11,
       winCondition: 'COMBO',

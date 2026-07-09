@@ -1,24 +1,52 @@
 import { Elysia, t } from 'elysia'
 import { prisma } from '../lib/prisma'
 import { importCard } from '../lib/cards'
+import { requireUserId } from '../security/tokens'
+import { isMember, FORBIDDEN_GROUP } from '../lib/membership'
 
 const participantInclude = {
   player: true,
   deck: { include: { commander: true } },
 } as const
 
+const NOT_FOUND = { error: 'not_found', error_description: 'Match not found' } as const
+
+// Loads a match's groupId and checks the caller belongs to it.
+async function canAccessMatch(userId: string, matchId: string): Promise<boolean> {
+  const match = await prisma.match.findUnique({
+    where: { id: matchId },
+    select: { groupId: true },
+  })
+  return !!match?.groupId && (await isMember(userId, match.groupId))
+}
+
 export const matches = new Elysia({ prefix: '/matches' })
-  .get('/', () =>
-    prisma.match.findMany({
-      orderBy: { playedAt: 'desc' },
-      include: {
-        participants: { include: participantInclude, orderBy: { seatOrder: 'asc' } },
-        _count: { select: { events: true } },
-      },
-    }),
+  .get(
+    '/',
+    async ({ headers, query, set }) => {
+      const userId = await requireUserId(headers.authorization)
+      if (!(await isMember(userId, query.groupId))) {
+        set.status = 403
+        return FORBIDDEN_GROUP
+      }
+      return prisma.match.findMany({
+        where: { groupId: query.groupId },
+        orderBy: { playedAt: 'desc' },
+        include: {
+          participants: { include: participantInclude, orderBy: { seatOrder: 'asc' } },
+          _count: { select: { events: true } },
+        },
+      })
+    },
+    { query: t.Object({ groupId: t.String() }) },
   )
-  .get('/:id', ({ params }) =>
-    prisma.match.findUnique({
+  .get('/:id', async ({ headers, params, set }) => {
+    const userId = await requireUserId(headers.authorization)
+    if (!(await canAccessMatch(userId, params.id))) {
+      set.status = 404
+      return NOT_FOUND
+    }
+    return prisma.match.findUnique({
       where: { id: params.id },
       include: {
         participants: { include: participantInclude, orderBy: { seatOrder: 'asc' } },
@@ -32,13 +60,31 @@ export const matches = new Elysia({ prefix: '/matches' })
         },
         bestCard: true,
       },
-    }),
-  )
+    })
+  })
   .post(
     '/',
-    ({ body }) =>
-      prisma.match.create({
+    async ({ headers, body, set }) => {
+      const userId = await requireUserId(headers.authorization)
+      if (!(await isMember(userId, body.groupId))) {
+        set.status = 403
+        return FORBIDDEN_GROUP
+      }
+      // Every seat's player must belong to the same group as the match.
+      const playerIds = body.participants.map((p) => p.playerId)
+      const inGroup = await prisma.player.count({
+        where: { id: { in: playerIds }, groupId: body.groupId },
+      })
+      if (inGroup !== new Set(playerIds).size) {
+        set.status = 400
+        return {
+          error: 'invalid_participants',
+          error_description: 'All participants must be players of this group',
+        }
+      }
+      return prisma.match.create({
         data: {
+          groupId: body.groupId,
           playedAt: body.playedAt ? new Date(body.playedAt) : undefined,
           durationMins: body.durationMins,
           turns: body.turns,
@@ -57,9 +103,11 @@ export const matches = new Elysia({ prefix: '/matches' })
           },
         },
         include: { participants: { include: participantInclude } },
-      }),
+      })
+    },
     {
       body: t.Object({
+        groupId: t.String(),
         playedAt: t.Optional(t.String()),
         durationMins: t.Optional(t.Number()),
         turns: t.Optional(t.Number()),
@@ -84,7 +132,12 @@ export const matches = new Elysia({ prefix: '/matches' })
   // optional card is imported from Scryfall on the fly.
   .post(
     '/:id/events',
-    async ({ params, body }) => {
+    async ({ headers, params, body, set }) => {
+      const userId = await requireUserId(headers.authorization)
+      if (!(await canAccessMatch(userId, params.id))) {
+        set.status = 404
+        return NOT_FOUND
+      }
       const last = await prisma.matchEvent.findFirst({
         where: { matchId: params.id },
         orderBy: { sequence: 'desc' },
@@ -120,7 +173,19 @@ export const matches = new Elysia({ prefix: '/matches' })
       }),
     },
   )
-  .delete('/:id/events/:eventId', ({ params }) =>
-    prisma.matchEvent.delete({ where: { id: params.eventId } }),
-  )
-  .delete('/:id', ({ params }) => prisma.match.delete({ where: { id: params.id } }))
+  .delete('/:id/events/:eventId', async ({ headers, params, set }) => {
+    const userId = await requireUserId(headers.authorization)
+    if (!(await canAccessMatch(userId, params.id))) {
+      set.status = 404
+      return NOT_FOUND
+    }
+    return prisma.matchEvent.delete({ where: { id: params.eventId } })
+  })
+  .delete('/:id', async ({ headers, params, set }) => {
+    const userId = await requireUserId(headers.authorization)
+    if (!(await canAccessMatch(userId, params.id))) {
+      set.status = 404
+      return NOT_FOUND
+    }
+    return prisma.match.delete({ where: { id: params.id } })
+  })

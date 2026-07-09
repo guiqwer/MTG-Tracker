@@ -41,7 +41,7 @@ export function UserMenu() {
   const username = me.data?.username ?? 'Account'
 
   return (
-    <div ref={ref} className="relative ml-auto">
+    <div ref={ref} className="relative">
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}

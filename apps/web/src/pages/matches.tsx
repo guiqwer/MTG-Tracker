@@ -5,6 +5,7 @@ import { toast } from 'sonner'
 import { Plus, Swords, Trophy, X, Clock, Hash, ChevronRight } from 'lucide-react'
 import { api } from '@/lib/eden'
 import { cn } from '@/lib/utils'
+import { useActiveGroup } from '@/lib/group'
 import { PageHeader } from '@/components/page-header'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -71,6 +72,9 @@ function PlacementBadge({ place, won }: { place: number | null; won: boolean }) 
 
 export function MatchesPage() {
   const qc = useQueryClient()
+  // RequireGroup guarantees an active group when this page renders.
+  const { activeGroup } = useActiveGroup()
+  const groupId = activeGroup!.id
   const [open, setOpen] = useState(false)
   const [rows, setRows] = useState<Row[]>(emptyRows)
   const [durationMins, setDuration] = useState('')
@@ -79,27 +83,27 @@ export function MatchesPage() {
   const [endReason, setEndReason] = useState('NATURAL')
 
   const players = useQuery({
-    queryKey: ['players'],
+    queryKey: ['players', groupId],
     queryFn: async () => {
-      const { data, error } = await api.players.get()
+      const { data, error } = await api.players.get({ query: { groupId } })
       if (error) throw error
-      return data
+      return data && 'error' in data ? null : data
     },
   })
   const decks = useQuery({
-    queryKey: ['decks'],
+    queryKey: ['decks', groupId],
     queryFn: async () => {
-      const { data, error } = await api.decks.get()
+      const { data, error } = await api.decks.get({ query: { groupId } })
       if (error) throw error
-      return data
+      return data && 'error' in data ? null : data
     },
   })
   const matches = useQuery({
-    queryKey: ['matches'],
+    queryKey: ['matches', groupId],
     queryFn: async () => {
-      const { data, error } = await api.matches.get()
+      const { data, error } = await api.matches.get({ query: { groupId } })
       if (error) throw error
-      return data
+      return data && 'error' in data ? null : data
     },
   })
 
@@ -114,6 +118,7 @@ export function MatchesPage() {
           placement: r.placement ? Number(r.placement) : undefined,
         }))
       const { data, error } = await api.matches.post({
+        groupId,
         durationMins: durationMins ? Number(durationMins) : undefined,
         turns: turns ? Number(turns) : undefined,
         winCondition: winCondition || undefined,

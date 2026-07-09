@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { Users, Layers, Swords, Activity, ArrowRight } from 'lucide-react'
 import { api } from '@/lib/eden'
 import { cn } from '@/lib/utils'
+import { useActiveGroup } from '@/lib/group'
 import { Card, CardContent } from '@/components/ui/card'
 import { Avatar } from '@/components/ui/avatar'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -47,28 +48,32 @@ function RowsSkeleton() {
 }
 
 export function DashboardPage() {
+  // RequireGroup guarantees an active group when this page renders.
+  const { activeGroup } = useActiveGroup()
+  const groupId = activeGroup!.id
+
   const overview = useQuery({
-    queryKey: ['overview'],
+    queryKey: ['overview', groupId],
     queryFn: async () => {
-      const { data, error } = await api.stats.overview.get()
+      const { data, error } = await api.stats.overview.get({ query: { groupId } })
       if (error) throw error
-      return data
+      return data && 'error' in data ? null : data
     },
   })
   const playerStats = useQuery({
-    queryKey: ['stats', 'players'],
+    queryKey: ['stats', 'players', groupId],
     queryFn: async () => {
-      const { data, error } = await api.stats.players.get()
+      const { data, error } = await api.stats.players.get({ query: { groupId } })
       if (error) throw error
-      return data
+      return data && 'error' in data ? null : data
     },
   })
   const deckStats = useQuery({
-    queryKey: ['stats', 'decks'],
+    queryKey: ['stats', 'decks', groupId],
     queryFn: async () => {
-      const { data, error } = await api.stats.decks.get()
+      const { data, error } = await api.stats.decks.get({ query: { groupId } })
       if (error) throw error
-      return data
+      return data && 'error' in data ? null : data
     },
   })
 
@@ -87,7 +92,7 @@ export function DashboardPage() {
   return (
     <div className="space-y-10">
       <div>
-        <p className="text-sm font-medium text-primary">Your playgroup</p>
+        <p className="text-sm font-medium text-primary">{activeGroup!.name}</p>
         <h1 className="mt-1 text-3xl font-bold tracking-tight">Dashboard</h1>
         {avgLine.length > 0 && (
           <p className="mt-1.5 text-sm text-muted-foreground">

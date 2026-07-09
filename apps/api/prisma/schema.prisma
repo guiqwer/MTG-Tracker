@@ -45,6 +45,8 @@ model Group {
   updatedAt  DateTime @updatedAt
 
   memberships GroupMembership[]
+  players     Player[]
+  matches     Match[]
 
   @@map("groups")
 }
@@ -65,14 +67,21 @@ model GroupMembership {
 
 model Player {
   id          String   @id @default(cuid())
-  name        String   @unique
+  name        String
   avatarColor String? // hex, used by the UI for the avatar chip
+  // Which playgroup this player belongs to. Optional at the DB level so the
+  // column could be added without a destructive migration — the seed backfills
+  // legacy rows and the API always sets it.
+  groupId     String?
+  group       Group?   @relation(fields: [groupId], references: [id], onDelete: Cascade)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
   decks          Deck[]
   participations MatchParticipant[]
 
+  @@unique([groupId, name]) // player names are unique within a group
+  @@index([groupId])
   @@map("players")
 }
 
@@ -149,6 +158,9 @@ model DeckCard {
 
 model Match {
   id           String        @id @default(cuid())
+  // Which playgroup this match belongs to (see the note on Player.groupId).
+  groupId      String?
+  group        Group?        @relation(fields: [groupId], references: [id], onDelete: Cascade)
   playedAt     DateTime      @default(now())
   durationMins Int?
   turns        Int?
@@ -164,6 +176,7 @@ model Match {
   events       MatchEvent[]
 
   @@index([playedAt])
+  @@index([groupId])
   @@map("matches")
 }
 

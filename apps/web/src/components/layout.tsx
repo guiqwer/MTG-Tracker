@@ -1,6 +1,8 @@
 import { Link, NavLink, Outlet } from 'react-router-dom'
 import { LayoutDashboard, Users, Layers, Swords } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { GroupProvider } from '@/lib/group'
+import { GroupSwitcher } from '@/components/group-switcher'
 import { UserMenu } from '@/components/user-menu'
 
 const nav = [
@@ -12,7 +14,8 @@ const nav = [
 
 export function Layout() {
   return (
-    <div className="min-h-dvh">
+    <GroupProvider>
+      <div className="min-h-dvh">
       <header className="sticky top-0 z-30 border-b border-border/70 bg-background/80 backdrop-blur-md">
         <div className="mx-auto flex h-16 max-w-6xl items-center gap-4 px-4 sm:gap-6 sm:px-8">
           <Link to="/app" className="flex items-center gap-2.5">
@@ -46,7 +49,10 @@ export function Layout() {
             ))}
           </nav>
 
-          <UserMenu />
+          <div className="ml-auto flex items-center gap-2">
+            <GroupSwitcher />
+            <UserMenu />
+          </div>
         </div>
       </header>
 
@@ -55,6 +61,7 @@ export function Layout() {
           <Outlet />
         </div>
       </main>
-    </div>
+      </div>
+    </GroupProvider>
   )
 }
