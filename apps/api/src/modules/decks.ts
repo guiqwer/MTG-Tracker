@@ -24,6 +24,18 @@ const deckInclude = {
 
 const NOT_FOUND = { error: 'not_found', error_description: 'Deck not found' } as const
 
+// Total card count = SUM of quantities, not the number of DeckCard rows
+// (a list with 9 Mountains is one row but nine cards).
+async function withCardCounts<T extends { id: string }>(decks: T[]) {
+  const sums = await prisma.deckCard.groupBy({
+    by: ['deckId'],
+    where: { deckId: { in: decks.map((d) => d.id) } },
+    _sum: { quantity: true },
+  })
+  const totals = new Map(sums.map((s) => [s.deckId, s._sum.quantity ?? 0]))
+  return decks.map((d) => ({ ...d, cardCount: totals.get(d.id) ?? 0 }))
+}
+
 // A deck is visible to its account owner and to members of its player-owner's
 // group (imported personal decks have userId; group decks have a Player owner).
 async function canAccessDeck(
@@ -80,22 +92,26 @@ export const decks = new Elysia({ prefix: '/decks' })
         set.status = 403
         return FORBIDDEN_GROUP
       }
-      return prisma.deck.findMany({
-        where: { owner: { groupId: query.groupId } },
-        orderBy: { createdAt: 'desc' },
-        include: deckInclude,
-      })
+      return withCardCounts(
+        await prisma.deck.findMany({
+          where: { owner: { groupId: query.groupId } },
+          orderBy: { createdAt: 'desc' },
+          include: deckInclude,
+        }),
+      )
     },
     { query: t.Object({ groupId: t.String() }) },
   )
   // The caller's personal decks — portable to any playgroup they're in.
   .get('/mine', async ({ headers }) => {
     const userId = await requireUserId(headers.authorization)
-    return prisma.deck.findMany({
-      where: { userId },
-      orderBy: { createdAt: 'desc' },
-      include: deckInclude,
-    })
+    return withCardCounts(
+      await prisma.deck.findMany({
+        where: { userId },
+        orderBy: { createdAt: 'desc' },
+        include: deckInclude,
+      }),
+    )
   })
   // Import a personal deck from a Moxfield link or a pasted decklist.
   .post(
@@ -187,7 +203,7 @@ export const decks = new Elysia({ prefix: '/decks' })
         },
         include: deckInclude,
       })
-      return { deck, notFound }
+      return { deck: (await withCardCounts([deck]))[0], notFound }
     },
     {
       body: t.Object({

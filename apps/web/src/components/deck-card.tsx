@@ -16,7 +16,8 @@ export interface DeckCardData {
   // Group decks are owned by a Player; imported personal decks by a User.
   owner: { name: string; avatarColor: string | null } | null
   user?: { username: string } | null
-  _count: { participations: number; cards?: number }
+  _count: { participations: number }
+  cardCount?: number // total cards (sum of quantities), set by the list endpoints
 }
 
 export function DeckCard({
@@ -28,7 +29,7 @@ export function DeckCard({
 }) {
   const art = deck.commander?.artCropUrl
   const games = deck._count.participations
-  const cardCount = deck._count.cards ?? 0
+  const cardCount = deck.cardCount ?? 0
   return (
     <div className="group relative overflow-hidden rounded-xl border bg-card transition-all duration-200 hover:border-primary/40 hover:shadow-lg hover:shadow-primary/5">
       <Link to={`/app/decks/${deck.id}`} className="block">
