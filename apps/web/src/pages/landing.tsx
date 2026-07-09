@@ -9,6 +9,7 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
+import { ThemeToggle } from '@/components/theme-toggle'
 import { currentAccent, ACCENT_IMAGE } from '@/lib/accent'
 
 const FEATURES = [
@@ -20,19 +21,19 @@ const FEATURES = [
   },
   {
     icon: Trophy,
-    chip: 'bg-amber-500/10 text-amber-600',
+    chip: 'bg-amber-500/10 text-amber-600 dark:text-amber-400',
     title: 'Multiplayer podium',
     desc: 'Not just a winner: full 1st–4th placement per seat, the way Commander actually plays.',
   },
   {
     icon: Activity,
-    chip: 'bg-sky-500/10 text-sky-600',
+    chip: 'bg-sky-500/10 text-sky-600 dark:text-sky-400',
     title: 'Event timeline',
     desc: 'Removals, tutors, board wipes, combos — log every beat with actor, target and card.',
   },
   {
     icon: BarChart3,
-    chip: 'bg-emerald-500/10 text-emerald-600',
+    chip: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
     title: 'Stats & rankings',
     desc: 'Winrates, matchups and averages for players and decks, at a glance.',
   },
@@ -57,6 +58,7 @@ function PublicNav() {
           </span>
         </Link>
         <div className="flex items-center gap-2">
+          <ThemeToggle />
           <Link to="/login">
             <Button variant="ghost" size="sm">Log in</Button>
           </Link>

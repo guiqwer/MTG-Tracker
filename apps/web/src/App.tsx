@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { Toaster } from 'sonner'
 import { queryClient } from './lib/query'
 import { isAuthenticated } from './lib/auth'
+import { useTheme } from './lib/theme'
 import { Layout } from './components/layout'
 import { RequireGroup } from './components/require-group'
 import { LandingPage } from './pages/landing'
@@ -26,6 +27,7 @@ function RequireAuth() {
 }
 
 export function App() {
+  const theme = useTheme()
   return (
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
@@ -54,7 +56,7 @@ export function App() {
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
         <Toaster
-          theme="light"
+          theme={theme}
           position="bottom-right"
           richColors
           closeButton

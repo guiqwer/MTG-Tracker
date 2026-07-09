@@ -18,6 +18,18 @@
           el.setAttribute('data-mtg', colors[i])
         } catch (e) {}
       })()
+      // Apply the saved theme before first paint (no flash). Falls back to the
+      // OS preference when the user hasn't chosen one.
+      ;(function () {
+        try {
+          var stored = localStorage.getItem('mtgTheme')
+          var dark =
+            stored === 'dark' ||
+            (stored !== 'light' &&
+              window.matchMedia('(prefers-color-scheme: dark)').matches)
+          if (dark) document.documentElement.classList.add('dark')
+        } catch (e) {}
+      })()
     </script>
   </head>
   <body>

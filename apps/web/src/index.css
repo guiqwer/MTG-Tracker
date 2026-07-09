@@ -36,6 +36,13 @@
 :root.mtg-red   { --primary: oklch(0.54 0.2 27);  --primary-foreground: oklch(0.99 0 0); --ring: oklch(0.54 0.2 27); }
 :root.mtg-green { --primary: oklch(0.5 0.13 152); --primary-foreground: oklch(0.99 0 0); --ring: oklch(0.5 0.13 152); }
 
+/* Brighter accent variants so the WUBRG primary stays readable on dark. */
+:root.dark.mtg-white { --primary: oklch(0.8 0.11 90);  --primary-foreground: oklch(0.2 0.03 90);  --ring: oklch(0.8 0.11 90); }
+:root.dark.mtg-blue  { --primary: oklch(0.7 0.13 248); --primary-foreground: oklch(0.16 0.03 248); --ring: oklch(0.7 0.13 248); }
+:root.dark.mtg-black { --primary: oklch(0.7 0.09 305); --primary-foreground: oklch(0.16 0.03 305); --ring: oklch(0.7 0.09 305); }
+:root.dark.mtg-red   { --primary: oklch(0.7 0.17 27);  --primary-foreground: oklch(0.16 0.03 27);  --ring: oklch(0.7 0.17 27); }
+:root.dark.mtg-green { --primary: oklch(0.72 0.14 152); --primary-foreground: oklch(0.15 0.03 152); --ring: oklch(0.72 0.14 152); }
+
 /* Optional dark theme (kept consistent for a future toggle). */
 .dark {
   --background: oklch(0.17 0.006 285);
@@ -123,6 +130,9 @@
     scrollbar-width: thin;
     scrollbar-color: oklch(0.8 0.01 280) transparent;
   }
+  .dark * {
+    scrollbar-color: oklch(0.38 0.01 285) transparent;
+  }
   ::-webkit-scrollbar {
     width: 10px;
     height: 10px;
@@ -137,8 +147,36 @@
     background: oklch(0.72 0.01 280);
     background-clip: content-box;
   }
+  .dark ::-webkit-scrollbar-thumb {
+    background: oklch(0.38 0.01 285);
+    background-clip: content-box;
+  }
+  .dark ::-webkit-scrollbar-thumb:hover {
+    background: oklch(0.48 0.01 285);
+    background-clip: content-box;
+  }
   ::selection {
     background: color-mix(in oklab, var(--primary) 22%, transparent);
+  }
+}
+
+/* Soft entrance for route changes (keyed on pathname in the app layout). */
+@keyframes page-enter {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.page-enter {
+  animation: page-enter 0.22s ease-out both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .page-enter {
+    animation: none;
   }
 }
 
