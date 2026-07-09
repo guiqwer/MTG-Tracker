@@ -174,8 +174,11 @@
     transform: none;
   }
 }
+/* `backwards` (not `both`): once the animation ends the transform is fully
+   released — a lingering transform would hijack position:fixed descendants
+   (it becomes their containing block) like the deck-card hover preview. */
 .page-enter {
-  animation: page-enter 0.22s ease-out both;
+  animation: page-enter 0.22s ease-out backwards;
 }
 @media (prefers-reduced-motion: reduce) {
   .page-enter {
