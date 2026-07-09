@@ -28,6 +28,7 @@ model User {
   updatedAt    DateTime @updatedAt
 
   memberships GroupMembership[]
+  decks       Deck[]
 
   @@map("users")
 }
@@ -118,8 +119,14 @@ model Card {
 model Deck {
   id            String   @id @default(cuid())
   name          String
-  ownerId       String
-  owner         Player   @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  // Two kinds of ownership:
+  //  - ownerId (Player): a group-local deck, tied to a seat in one playgroup.
+  //  - userId (User): a personal deck imported by an account — portable, the
+  //    user can bring it to any playgroup they're in.
+  ownerId       String?
+  owner         Player?  @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  userId        String?
+  user          User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
   commanderId   String?
   commander     Card?    @relation("Commander", fields: [commanderId], references: [id])
   partnerId     String?
@@ -133,9 +140,10 @@ model Deck {
   updatedAt     DateTime @updatedAt
 
   participations MatchParticipant[]
-  cards          DeckCard[] // full 100-card list (populated by import, phase 2)
+  cards          DeckCard[] // full 100-card list (populated by import)
 
   @@index([ownerId])
+  @@index([userId])
   @@map("decks")
 }
 

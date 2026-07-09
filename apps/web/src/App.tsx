@@ -13,6 +13,7 @@ import { PlayersPage } from './pages/players'
 import { DecksPage } from './pages/decks'
 import { MatchesPage } from './pages/matches'
 import { MatchDetailPage } from './pages/match-detail'
+import { DeckDetailPage } from './pages/deck-detail'
 import { GroupsPage } from './pages/groups'
 import { CreateGroupPage } from './pages/group-new'
 import { JoinGroupPage } from './pages/group-join'
@@ -39,6 +40,8 @@ export function App() {
             <Route index element={<RequireGroup><DashboardPage /></RequireGroup>} />
             <Route path="players" element={<RequireGroup><PlayersPage /></RequireGroup>} />
             <Route path="decks" element={<RequireGroup><DecksPage /></RequireGroup>} />
+            {/* Personal decks are account-level, so the detail view doesn't need a group */}
+            <Route path="decks/:id" element={<DeckDetailPage />} />
             <Route path="matches" element={<RequireGroup><MatchesPage /></RequireGroup>} />
             <Route path="matches/:id" element={<RequireGroup><MatchDetailPage /></RequireGroup>} />
             <Route path="groups" element={<GroupsPage />} />

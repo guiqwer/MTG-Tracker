@@ -71,3 +71,29 @@ export async function fetchCardByName(name: string): Promise<ScryfallCard | null
   if (!res.ok) return null
   return normalize(await res.json())
 }
+
+export type CardIdentifier = { id: string } | { name: string }
+
+// Bulk lookup via /cards/collection — up to 75 identifiers per request, so a
+// full 100-card Commander list costs just 2 calls instead of 100.
+export async function fetchCollection(
+  identifiers: CardIdentifier[],
+): Promise<{ cards: ScryfallCard[]; notFound: string[] }> {
+  const cards: ScryfallCard[] = []
+  const notFound: string[] = []
+  for (let i = 0; i < identifiers.length; i += 75) {
+    const chunk = identifiers.slice(i, i + 75)
+    const res = await fetch(`${BASE}/cards/collection`, {
+      method: 'POST',
+      headers: { ...HEADERS, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ identifiers: chunk }),
+    })
+    if (!res.ok) throw new Error(`Scryfall collection lookup failed (${res.status})`)
+    const data = (await res.json()) as any
+    cards.push(...(data.data ?? []).map(normalize))
+    notFound.push(
+      ...(data.not_found ?? []).map((n: any) => n.name ?? n.id ?? 'unknown'),
+    )
+  }
+  return { cards, notFound }
+}

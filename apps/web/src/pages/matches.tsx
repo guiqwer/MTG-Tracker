@@ -106,6 +106,15 @@ export function MatchesPage() {
       return data && 'error' in data ? null : data
     },
   })
+  // Personal imported decks — you can bring yours to any table.
+  const myDecks = useQuery({
+    queryKey: ['my-decks'],
+    queryFn: async () => {
+      const { data, error } = await api.decks.mine.get()
+      if (error) throw error
+      return data
+    },
+  })
 
   const create = useMutation({
     mutationFn: async () => {
@@ -204,6 +213,15 @@ export function MatchesPage() {
                         {d.name}
                       </option>
                     ))}
+                    {(myDecks.data?.length ?? 0) > 0 && (
+                      <optgroup label="My decks (imported)">
+                        {myDecks.data!.map((d) => (
+                          <option key={d.id} value={d.id}>
+                            {d.name}
+                          </option>
+                        ))}
+                      </optgroup>
+                    )}
                   </select>
                   <Input
                     type="number"

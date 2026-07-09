@@ -77,18 +77,31 @@ export const stats = new Elysia({ prefix: '/stats' })
         set.status = 403
         return FORBIDDEN_GROUP
       }
+      // Group decks + personal (account) decks that have played in this group.
       const decks = await prisma.deck.findMany({
-        where: { owner: { groupId: query.groupId } },
-        include: { owner: true, commander: true, participations: true },
+        where: {
+          OR: [
+            { owner: { groupId: query.groupId } },
+            { participations: { some: { match: { groupId: query.groupId } } } },
+          ],
+        },
+        include: {
+          owner: true,
+          user: { select: { username: true } },
+          commander: true,
+          participations: { include: { match: { select: { groupId: true } } } },
+        },
       })
       return decks
         .map((d) => {
-          const games = d.participations.length
-          const wins = d.participations.filter(isWin).length
+          // Winrate counts only games played at THIS table.
+          const parts = d.participations.filter((p) => p.match.groupId === query.groupId)
+          const games = parts.length
+          const wins = parts.filter(isWin).length
           return {
             id: d.id,
             name: d.name,
-            owner: d.owner.name,
+            owner: d.owner?.name ?? d.user?.username ?? '—',
             commander: d.commander?.name ?? null,
             colorIdentity: d.colorIdentity,
             games,

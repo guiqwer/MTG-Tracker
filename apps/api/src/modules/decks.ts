@@ -1,17 +1,76 @@
 import { Elysia, t } from 'elysia'
 import { prisma } from '../lib/prisma'
-import { importCard } from '../lib/cards'
+import { importCard, upsertCard } from '../lib/cards'
+import { fetchCollection, type CardIdentifier, type ScryfallCard } from '../lib/scryfall'
+import {
+  fetchMoxfieldDeck,
+  parseMoxfieldUrl,
+  parseTextDecklist,
+  type ParsedDeck,
+  type ParsedEntry,
+} from '../lib/decklist'
 import { requireUserId } from '../security/tokens'
 import { isMember, FORBIDDEN_GROUP } from '../lib/membership'
 
+// Never include the raw user relation (it carries passwordHash) — select only
+// what the UI shows.
 const deckInclude = {
   owner: true,
+  user: { select: { id: true, username: true } },
   commander: true,
   partner: true,
-  _count: { select: { participations: true } },
+  _count: { select: { participations: true, cards: true } },
 } as const
 
-// A deck's group is its owner's group — decks don't carry their own groupId.
+const NOT_FOUND = { error: 'not_found', error_description: 'Deck not found' } as const
+
+// A deck is visible to its account owner and to members of its player-owner's
+// group (imported personal decks have userId; group decks have a Player owner).
+async function canAccessDeck(
+  userId: string,
+  deck: { userId: string | null; owner: { groupId: string | null } | null },
+): Promise<boolean> {
+  if (deck.userId === userId) return true
+  if (deck.owner?.groupId) return isMember(userId, deck.owner.groupId)
+  return false
+}
+
+// Resolve parsed entries to cards in our DB via one bulk Scryfall lookup.
+async function resolveEntries(entries: ParsedEntry[]) {
+  const identifiers: CardIdentifier[] = []
+  const seen = new Set<string>()
+  for (const e of entries) {
+    const key = e.scryfallId ?? `name:${e.name?.toLowerCase()}`
+    if (!key || seen.has(key)) continue
+    seen.add(key)
+    identifiers.push(e.scryfallId ? { id: e.scryfallId } : { name: e.name! })
+  }
+  const { cards, notFound } = await fetchCollection(identifiers)
+
+  // Index by scryfall id + full name + front-face name so text entries like
+  // "Fire" still match "Fire // Ice".
+  const byKey = new Map<string, ScryfallCard>()
+  for (const c of cards) {
+    byKey.set(c.scryfallId, c)
+    byKey.set(c.name.toLowerCase(), c)
+    byKey.set(c.name.split(' // ')[0].toLowerCase(), c)
+  }
+
+  const stored = new Map<string, { id: string; colorIdentity: string[] }>()
+  for (const c of cards) {
+    const row = await upsertCard(c)
+    stored.set(c.scryfallId, { id: row.id, colorIdentity: row.colorIdentity })
+  }
+
+  const lookup = (e: ParsedEntry) => {
+    const sc = e.scryfallId
+      ? byKey.get(e.scryfallId)
+      : byKey.get(e.name?.toLowerCase() ?? '')
+    return sc ? { scryfall: sc, db: stored.get(sc.scryfallId)! } : null
+  }
+  return { lookup, notFound }
+}
+
 export const decks = new Elysia({ prefix: '/decks' })
   .get(
     '/',
@@ -29,12 +88,129 @@ export const decks = new Elysia({ prefix: '/decks' })
     },
     { query: t.Object({ groupId: t.String() }) },
   )
+  // The caller's personal decks — portable to any playgroup they're in.
+  .get('/mine', async ({ headers }) => {
+    const userId = await requireUserId(headers.authorization)
+    return prisma.deck.findMany({
+      where: { userId },
+      orderBy: { createdAt: 'desc' },
+      include: deckInclude,
+    })
+  })
+  // Import a personal deck from a Moxfield link or a pasted decklist.
+  .post(
+    '/import',
+    async ({ headers, body, set }) => {
+      const userId = await requireUserId(headers.authorization)
+
+      let parsed: ParsedDeck
+      if (body.url) {
+        const publicId = parseMoxfieldUrl(body.url)
+        if (!publicId) {
+          set.status = 400
+          return {
+            error: 'invalid_url',
+            error_description: 'That does not look like a Moxfield deck link',
+          }
+        }
+        try {
+          parsed = await fetchMoxfieldDeck(publicId)
+        } catch (e) {
+          set.status = 502
+          return {
+            error: 'moxfield_failed',
+            error_description: `Could not fetch the deck from Moxfield (${
+              e instanceof Error ? e.message : 'unknown error'
+            }). Try pasting the decklist as text instead.`,
+          }
+        }
+      } else if (body.text?.trim()) {
+        parsed = parseTextDecklist(body.text)
+        // A commander typed in the form wins over anything detected in the text.
+        if (body.commanderName?.trim()) {
+          parsed.commanders = [{ quantity: 1, name: body.commanderName.trim() }]
+        }
+      } else {
+        set.status = 400
+        return {
+          error: 'empty_import',
+          error_description: 'Provide a Moxfield link or paste a decklist',
+        }
+      }
+
+      if (!parsed.mainboard.length && !parsed.commanders.length) {
+        set.status = 400
+        return { error: 'empty_import', error_description: 'No cards found to import' }
+      }
+
+      const { lookup, notFound } = await resolveEntries([
+        ...parsed.commanders,
+        ...parsed.mainboard,
+      ])
+
+      // Commander (+ optional partner) drive the deck's color identity.
+      const commanderCards = parsed.commanders
+        .map(lookup)
+        .filter((c): c is NonNullable<typeof c> => c !== null)
+      const commander = commanderCards[0] ?? null
+      const partner = commanderCards[1] ?? null
+      const colorIdentity = Array.from(
+        new Set(commanderCards.flatMap((c) => c.db.colorIdentity)),
+      )
+
+      // Aggregate main deck rows by card (a list may repeat basics).
+      const quantities = new Map<string, number>()
+      for (const entry of parsed.mainboard) {
+        const hit = lookup(entry)
+        if (!hit) continue
+        quantities.set(hit.db.id, (quantities.get(hit.db.id) ?? 0) + entry.quantity)
+      }
+      // Commanders are part of the 100 — keep them in the list too.
+      for (const c of commanderCards) {
+        if (!quantities.has(c.db.id)) quantities.set(c.db.id, 1)
+      }
+
+      const deck = await prisma.deck.create({
+        data: {
+          name: body.name?.trim() || parsed.name || 'Imported deck',
+          userId,
+          commanderId: commander?.db.id,
+          partnerId: partner?.db.id,
+          colorIdentity,
+          moxfieldUrl: body.url?.trim() || undefined,
+          cards: {
+            create: [...quantities.entries()].map(([cardId, quantity]) => ({
+              cardId,
+              quantity,
+            })),
+          },
+        },
+        include: deckInclude,
+      })
+      return { deck, notFound }
+    },
+    {
+      body: t.Object({
+        url: t.Optional(t.String()),
+        text: t.Optional(t.String()),
+        name: t.Optional(t.String({ maxLength: 80 })),
+        commanderName: t.Optional(t.String({ maxLength: 120 })),
+      }),
+    },
+  )
+  // Deck detail with its full card list (the deck-view page groups by type).
   .get('/:id', async ({ headers, params, set }) => {
     const userId = await requireUserId(headers.authorization)
-    const deck = await prisma.deck.findUnique({ where: { id: params.id }, include: deckInclude })
-    if (!deck?.owner.groupId || !(await isMember(userId, deck.owner.groupId))) {
+    const deck = await prisma.deck.findUnique({
+      where: { id: params.id },
+      include: {
+        ...deckInclude,
+        cards: { include: { card: true }, orderBy: { card: { name: 'asc' } } },
+      },
+    })
+    if (!deck || !(await canAccessDeck(userId, deck))) {
       set.status = 404
-      return { error: 'not_found', error_description: 'Deck not found' }
+      return NOT_FOUND
     }
     return deck
   })
@@ -98,9 +274,9 @@ export const decks = new Elysia({ prefix: '/decks' })
       where: { id: params.id },
       include: { owner: true },
     })
-    if (!deck?.owner.groupId || !(await isMember(userId, deck.owner.groupId))) {
+    if (!deck || !(await canAccessDeck(userId, deck))) {
       set.status = 404
-      return { error: 'not_found', error_description: 'Deck not found' }
+      return NOT_FOUND
     }
     return prisma.deck.delete({ where: { id: params.id } })
   })
