@@ -10,9 +10,9 @@ export function currentAccent(): MtgColor {
 
 // Backdrop art per color (served from apps/web/public/mtg/).
 export const ACCENT_IMAGE: Record<MtgColor, string> = {
-  white: '/mtg/white.avif',
+  white: '/mtg/white.webp',
   blue: '/mtg/blue.webp',
   black: '/mtg/black.webp',
-  red: '/mtg/red.jpg',
-  green: '/mtg/green.jpg',
+  red: '/mtg/red.webp',
+  green: '/mtg/green.webp',
 }
