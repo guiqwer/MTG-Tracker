@@ -128,6 +128,75 @@ export const matches = new Elysia({ prefix: '/matches' })
       }),
     },
   )
+  // Edit a match after the fact — metadata and/or the podium (placements).
+  .patch(
+    '/:id',
+    async ({ headers, params, body, set }) => {
+      const userId = await requireUserId(headers.authorization)
+      if (!(await canAccessMatch(userId, params.id))) {
+        set.status = 404
+        return NOT_FOUND
+      }
+      if (body.placements?.length) {
+        const valid = await prisma.matchParticipant.count({
+          where: {
+            matchId: params.id,
+            id: { in: body.placements.map((p) => p.participantId) },
+          },
+        })
+        if (valid !== new Set(body.placements.map((p) => p.participantId)).size) {
+          set.status = 400
+          return {
+            error: 'invalid_participants',
+            error_description: 'Placements must reference seats of this match',
+          }
+        }
+      }
+      await prisma.$transaction([
+        prisma.match.update({
+          where: { id: params.id },
+          data: {
+            playedAt: body.playedAt ? new Date(body.playedAt) : undefined,
+            durationMins: body.durationMins,
+            turns: body.turns,
+            winCondition: (body.winCondition || undefined) as never,
+            endReason: (body.endReason || undefined) as never,
+            notes: body.notes,
+          },
+        }),
+        ...(body.placements ?? []).map((p) =>
+          prisma.matchParticipant.update({
+            where: { id: p.participantId },
+            data: { placement: p.placement, isWinner: p.placement === 1 },
+          }),
+        ),
+      ])
+      return prisma.match.findUnique({
+        where: { id: params.id },
+        include: {
+          participants: { include: participantInclude, orderBy: { seatOrder: 'asc' } },
+        },
+      })
+    },
+    {
+      body: t.Object({
+        playedAt: t.Optional(t.String()),
+        durationMins: t.Optional(t.Number()),
+        turns: t.Optional(t.Number()),
+        winCondition: t.Optional(t.String()),
+        endReason: t.Optional(t.String()),
+        notes: t.Optional(t.String()),
+        placements: t.Optional(
+          t.Array(
+            t.Object({
+              participantId: t.String(),
+              placement: t.Number({ minimum: 1, maximum: 12 }),
+            }),
+          ),
+        ),
+      }),
+    },
+  )
   // Append an event to the match timeline. Sequence is auto-assigned; an
   // optional card is imported from Scryfall on the fly.
   .post(

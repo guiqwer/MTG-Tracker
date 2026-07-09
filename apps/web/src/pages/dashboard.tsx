@@ -100,6 +100,7 @@ interface Insights {
     firstBlood: number
   }[]
   monthly: { month: string; matches: number }[]
+  topCards: { id: string; name: string; manaCost: string | null; decks: number }[]
   recent: {
     id: string
     playedAt: string
@@ -321,7 +322,7 @@ export function DashboardPage() {
       {/* Table meta */}
       <section className="space-y-3">
         <SectionTitle>Table meta</SectionTitle>
-        <div className="grid gap-4 lg:grid-cols-3">
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <Card>
             <CardContent className="p-5">
               <h3 className="mb-3 text-sm font-semibold">How games end</h3>
@@ -378,6 +379,27 @@ export function DashboardPage() {
               ) : (
                 <p className="py-6 text-center text-sm text-muted-foreground">No data yet</p>
               )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="p-5">
+              <h3 className="mb-3 text-sm font-semibold">Most played cards</h3>
+              {ins?.topCards.length ? (
+                ins.topCards.slice(0, 6).map((c) => (
+                  <BarRow
+                    key={c.id}
+                    label={c.name}
+                    value={c.decks}
+                    max={Math.max(...ins.topCards.map((x) => x.decks), 1)}
+                  />
+                ))
+              ) : (
+                <p className="py-6 text-center text-sm text-muted-foreground">No data yet</p>
+              )}
+              <p className="mt-2 text-[11px] text-muted-foreground">
+                Across the table's decks, basics excluded.
+              </p>
             </CardContent>
           </Card>
         </div>

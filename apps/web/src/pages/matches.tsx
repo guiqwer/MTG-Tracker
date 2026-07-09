@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { Plus, Swords, Trash2, Trophy, X, Clock, Hash, ChevronRight } from 'lucide-react'
+import { Download, Plus, Swords, Trash2, Trophy, X, Clock, Hash, ChevronRight } from 'lucide-react'
 import { api } from '@/lib/eden'
 import { cn } from '@/lib/utils'
 import { useActiveGroup } from '@/lib/group'
@@ -168,6 +168,42 @@ export function MatchesPage() {
     onError: () => toast.error('Could not remove match'),
   })
 
+  // CSV of every logged match (one row per seat) — built entirely client-side.
+  const exportCsv = () => {
+    if (!matches.data?.length) return
+    const esc = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`
+    const header = [
+      'date', 'durationMins', 'turns', 'winCondition', 'endReason',
+      'player', 'deck', 'commander', 'placement', 'winner',
+    ]
+    const lines = [header.join(',')]
+    for (const m of matches.data) {
+      for (const pt of m.participants) {
+        lines.push(
+          [
+            new Date(m.playedAt).toISOString().slice(0, 10),
+            m.durationMins ?? '',
+            m.turns ?? '',
+            m.winCondition ?? '',
+            m.endReason ?? '',
+            esc(pt.player.name),
+            esc(pt.deck.name),
+            esc(pt.deck.commander?.name ?? ''),
+            pt.placement ?? '',
+            pt.isWinner || pt.placement === 1 ? 'yes' : '',
+          ].join(','),
+        )
+      }
+    }
+    const blob = new Blob([lines.join('\n')], { type: 'text/csv' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `matches-${activeGroup!.name.replace(/[^\w-]+/g, '-').toLowerCase()}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
   const setRow = (i: number, patch: Partial<Row>) =>
     setRows((prev) => prev.map((r, idx) => (idx === i ? { ...r, ...patch } : r)))
   // A seat can play the player's table decks plus the personal decks of the
@@ -187,6 +223,11 @@ export function MatchesPage() {
   return (
     <div className="space-y-6">
       <PageHeader title="Matches" subtitle="History and podium of every game." icon={Swords}>
+        {(matches.data?.length ?? 0) > 0 && (
+          <Button variant="outline" onClick={exportCsv} title="Download CSV">
+            <Download /> CSV
+          </Button>
+        )}
         <Button onClick={() => setOpen((v) => !v)} variant={open ? 'secondary' : 'default'}>
           {open ? <X /> : <Plus />} {open ? 'Close' : 'Log match'}
         </Button>

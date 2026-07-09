@@ -112,6 +112,7 @@ model Card {
   cmc           Float    @default(0)
   colorIdentity String[] @default([]) // ["W","U","B","R","G"]
   oracleText    String?
+  priceUsd      Float? // Scryfall market price, refreshed on import/sync
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 

@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { BadgeCheck, Trash2, UserPlus, Users } from 'lucide-react'
+import { BadgeCheck, Link2, Trash2, UserPlus, Users } from 'lucide-react'
 import { api } from '@/lib/eden'
 import { cn } from '@/lib/utils'
 import { useActiveGroup } from '@/lib/group'
@@ -32,9 +32,11 @@ interface PlayerRow {
 function PlayerCard({
   player,
   onDelete,
+  footer,
 }: {
   player: PlayerRow
   onDelete?: (id: string) => void
+  footer?: React.ReactNode
 }) {
   return (
     <Card className="group transition-shadow hover:shadow-md">
@@ -80,6 +82,7 @@ function PlayerCard({
           </Button>
         )}
       </CardContent>
+      {footer && <div className="border-t border-border/60 px-3.5 py-2">{footer}</div>}
     </Card>
   )
 }
@@ -113,6 +116,27 @@ export function PlayersPage() {
       qc.invalidateQueries({ queryKey: ['players'] })
     },
     onError: () => toast.error('Could not add the guest (name already taken?)'),
+  })
+
+  // Claim: a guest's history is merged into a member's seat.
+  const claim = useMutation({
+    mutationFn: async ({ playerId, userId }: { playerId: string; userId: string }) => {
+      const { data, error } = await api.players({ id: playerId }).claim.post({ userId })
+      if (error) throw error
+      return data
+    },
+    onSuccess: () => {
+      toast.success('Guest linked — history merged into the member')
+      qc.invalidateQueries({ queryKey: ['players'] })
+      qc.invalidateQueries({ queryKey: ['decks'] })
+      qc.invalidateQueries({ queryKey: ['stats'] })
+    },
+    onError: (err) => {
+      const msg =
+        (err as { value?: { error_description?: string } })?.value?.error_description ??
+        'Could not link the guest'
+      toast.error(msg)
+    },
   })
 
   const remove = useMutation({
@@ -226,7 +250,44 @@ export function PlayersPage() {
             {guests.length ? (
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 {guests.map((p) => (
-                  <PlayerCard key={p.id} player={p} onDelete={(id) => remove.mutate(id)} />
+                  <PlayerCard
+                    key={p.id}
+                    player={p}
+                    onDelete={(id) => remove.mutate(id)}
+                    footer={
+                      members.length > 0 ? (
+                        <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                          <Link2 className="h-3.5 w-3.5 shrink-0" />
+                          <select
+                            value=""
+                            disabled={claim.isPending}
+                            onChange={(e) => {
+                              const userId = e.target.value
+                              const member = members.find((mm) => mm.user!.id === userId)
+                              if (
+                                userId &&
+                                member &&
+                                confirm(
+                                  `Merge "${p.name}" into ${member.name}? Their matches and decks move over.`,
+                                )
+                              ) {
+                                claim.mutate({ playerId: p.id, userId })
+                              }
+                              e.target.value = ''
+                            }}
+                            className="h-7 flex-1 cursor-pointer rounded-md border border-input bg-transparent px-1.5 text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                          >
+                            <option value="">Link to member…</option>
+                            {members.map((mm) => (
+                              <option key={mm.user!.id} value={mm.user!.id}>
+                                {mm.name}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                      ) : undefined
+                    }
+                  />
                 ))}
               </div>
             ) : (

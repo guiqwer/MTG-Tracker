@@ -306,6 +306,34 @@ export const stats = new Elysia({ prefix: '/stats' })
         })
       }
 
+      // ── Most played cards across the table's decks (basics excluded) ─────
+      const cardCounts = await prisma.deckCard.groupBy({
+        by: ['cardId'],
+        where: {
+          deck: {
+            OR: [
+              { owner: { groupId } },
+              { user: { memberships: { some: { groupId } } } },
+            ],
+          },
+          card: { NOT: { typeLine: { startsWith: 'Basic Land' } } },
+        },
+        _count: { cardId: true },
+        orderBy: { _count: { cardId: 'desc' } },
+        take: 10,
+      })
+      const cardRows = await prisma.card.findMany({
+        where: { id: { in: cardCounts.map((c) => c.cardId) } },
+        select: { id: true, name: true, manaCost: true },
+      })
+      const cardById = new Map(cardRows.map((c) => [c.id, c]))
+      const topCards = cardCounts.map((c) => ({
+        id: c.cardId,
+        name: cardById.get(c.cardId)?.name ?? '?',
+        manaCost: cardById.get(c.cardId)?.manaCost ?? null,
+        decks: c._count.cardId,
+      }))
+
       const recent = matches.slice(0, 5).map((m) => {
         const winner = m.participants.find(isWin)
         return {
@@ -339,6 +367,7 @@ export const stats = new Elysia({ prefix: '/stats' })
         podium,
         monthly,
         recent,
+        topCards,
       }
     },
     groupQuery,

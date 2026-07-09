@@ -14,6 +14,7 @@ import {
   Infinity as InfinityIcon,
   Plus,
   Search,
+  Pencil,
   Skull,
   Sparkles,
   Sprout,
@@ -160,9 +161,55 @@ export function MatchDetailPage() {
     },
   })
 
+  // Post-hoc editing: metadata + podium placements.
+  const [editOpen, setEditOpen] = useState(false)
+  const [eDuration, setEDuration] = useState('')
+  const [eTurns, setETurns] = useState('')
+  const [eWincon, setEWincon] = useState('')
+  const [eEndReason, setEEndReason] = useState('')
+  const [ePlacements, setEPlacements] = useState<Record<string, string>>({})
+
   const m = match.data
   const participants = m?.participants ?? []
   const events = m?.events ?? []
+
+  const openEdit = () => {
+    if (!m) return
+    setEDuration(m.durationMins ? String(m.durationMins) : '')
+    setETurns(m.turns ? String(m.turns) : '')
+    setEWincon(m.winCondition ?? '')
+    setEEndReason(m.endReason ?? '')
+    setEPlacements(
+      Object.fromEntries(
+        participants.map((p) => [p.id, p.placement ? String(p.placement) : '']),
+      ),
+    )
+    setEditOpen(true)
+  }
+
+  const saveEdit = useMutation({
+    mutationFn: async () => {
+      const placements = Object.entries(ePlacements)
+        .filter(([, v]) => v.trim())
+        .map(([participantId, v]) => ({ participantId, placement: Number(v) }))
+      const { data, error } = await api.matches({ id: matchId }).patch({
+        durationMins: eDuration ? Number(eDuration) : undefined,
+        turns: eTurns ? Number(eTurns) : undefined,
+        winCondition: eWincon || undefined,
+        endReason: eEndReason || undefined,
+        placements: placements.length ? placements : undefined,
+      })
+      if (error) throw error
+      return data && 'error' in data ? null : data
+    },
+    onSuccess: () => {
+      toast.success('Match updated')
+      setEditOpen(false)
+      invalidate()
+      qc.invalidateQueries({ queryKey: ['stats'] })
+    },
+    onError: () => toast.error('Could not update the match'),
+  })
 
   return (
     <div className="space-y-6">
@@ -194,6 +241,13 @@ export function MatchDetailPage() {
             {m.winCondition && (
               <Badge variant="gold">{WINCON_LABEL[m.winCondition] ?? m.winCondition}</Badge>
             )}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => (editOpen ? setEditOpen(false) : openEdit())}
+            >
+              <Pencil /> {editOpen ? 'Close' : 'Edit'}
+            </Button>
             <Button variant="outline" size="sm" onClick={() => delMatch.mutate()}>
               <Trash2 /> Delete
             </Button>
@@ -208,6 +262,75 @@ export function MatchDetailPage() {
               .filter(Boolean)
               .join('  ·  ')}
           </p>
+
+          {editOpen && (
+            <Card>
+              <CardContent className="space-y-4 p-5">
+                <div className="grid gap-3 sm:grid-cols-4">
+                  <div className="grid gap-1.5">
+                    <Label>Duration (min)</Label>
+                    <Input
+                      type="number"
+                      value={eDuration}
+                      onChange={(e) => setEDuration(e.target.value)}
+                    />
+                  </div>
+                  <div className="grid gap-1.5">
+                    <Label>Turns</Label>
+                    <Input type="number" value={eTurns} onChange={(e) => setETurns(e.target.value)} />
+                  </div>
+                  <div className="grid gap-1.5">
+                    <Label>Win condition</Label>
+                    <select
+                      value={eWincon}
+                      onChange={(e) => setEWincon(e.target.value)}
+                      className={selectCls}
+                    >
+                      <option value="">—</option>
+                      {Object.keys(WINCON_LABEL).map((w) => (
+                        <option key={w} value={w}>
+                          {WINCON_LABEL[w]}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="grid gap-1.5">
+                    <Label>End reason</Label>
+                    <select
+                      value={eEndReason}
+                      onChange={(e) => setEEndReason(e.target.value)}
+                      className={selectCls}
+                    >
+                      <option value="">—</option>
+                      {['NATURAL', 'TIME_CALLED', 'CONCESSION', 'DRAW'].map((r) => (
+                        <option key={r} value={r}>
+                          {r}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+                <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                  {participants.map((p) => (
+                    <div key={p.id} className="grid gap-1.5">
+                      <Label className="truncate">{p.player.name} — place</Label>
+                      <Input
+                        type="number"
+                        min={1}
+                        value={ePlacements[p.id] ?? ''}
+                        onChange={(e) =>
+                          setEPlacements((prev) => ({ ...prev, [p.id]: e.target.value }))
+                        }
+                      />
+                    </div>
+                  ))}
+                </div>
+                <Button onClick={() => saveEdit.mutate()} disabled={saveEdit.isPending}>
+                  {saveEdit.isPending ? 'Saving…' : 'Save changes'}
+                </Button>
+              </CardContent>
+            </Card>
+          )}
 
           {/* Podium */}
           <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">

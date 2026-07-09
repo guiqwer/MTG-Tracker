@@ -3,8 +3,19 @@ import { createPortal } from 'react-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { toast } from 'sonner'
-import { ChevronLeft, ExternalLink, Layers, Trash2, User } from 'lucide-react'
+import {
+  ChevronLeft,
+  Copy,
+  Download,
+  ExternalLink,
+  Layers,
+  RefreshCw,
+  Trash2,
+  User,
+} from 'lucide-react'
 import { api } from '@/lib/eden'
+import { useMe } from '@/lib/me'
+import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -22,7 +33,32 @@ interface CardRow {
     manaCost: string | null
     cmc: number
     imageUrl: string | null
+    priceUsd: number | null
   }
+}
+
+// Plain-text list in the format Moxfield/Arena accept — for copy and export.
+function buildDecklist(d: {
+  commander: { name: string } | null
+  commanderId: string | null
+  partnerId: string | null
+  cards: CardRow[]
+}): string {
+  const commanders = d.cards.filter(
+    (r) => r.cardId === d.commanderId || r.cardId === d.partnerId,
+  )
+  const main = d.cards.filter(
+    (r) => r.cardId !== d.commanderId && r.cardId !== d.partnerId,
+  )
+  const lines: string[] = []
+  if (commanders.length) {
+    lines.push('Commander')
+    for (const r of commanders) lines.push(`1 ${r.card.name}`)
+    lines.push('')
+  }
+  lines.push('Deck')
+  for (const r of main) lines.push(`${r.quantity} ${r.card.name}`)
+  return lines.join('\n')
 }
 
 interface DeckDetail {
@@ -139,6 +175,7 @@ export function DeckDetailPage() {
   const { id = '' } = useParams()
   const navigate = useNavigate()
   const qc = useQueryClient()
+  const me = useMe()
 
   const deck = useQuery({
     queryKey: ['deck', id],
@@ -163,7 +200,51 @@ export function DeckDetailPage() {
     onError: () => toast.error('Could not remove the deck'),
   })
 
+  const sync = useMutation({
+    mutationFn: async () => {
+      const { data, error } = await api.decks({ id }).sync.post()
+      if (error) throw error
+      return data && 'error' in data ? null : data
+    },
+    onSuccess: (r) => {
+      toast.success(
+        r?.notFound?.length
+          ? `Synced — ${r.notFound.length} card(s) not found`
+          : 'Deck synced with Moxfield',
+      )
+      qc.invalidateQueries({ queryKey: ['deck', id] })
+      qc.invalidateQueries({ queryKey: ['my-decks'] })
+    },
+    onError: (err) => {
+      const msg =
+        (err as { value?: { error_description?: string } })?.value?.error_description ??
+        'Could not sync the deck'
+      toast.error(msg)
+    },
+  })
+
   const d = deck.data
+
+  const copyList = async () => {
+    if (!d) return
+    try {
+      await navigator.clipboard.writeText(buildDecklist(d))
+      toast.success('Decklist copied')
+    } catch {
+      toast.error('Could not copy — try the download instead')
+    }
+  }
+
+  const downloadList = () => {
+    if (!d) return
+    const blob = new Blob([buildDecklist(d)], { type: 'text/plain' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${d.name.replace(/[^\w-]+/g, '-').toLowerCase()}.txt`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
 
   // Commander(s) get their own bucket at the top, like Moxfield.
   const buckets = new Map<string, CardRow[]>()
@@ -178,6 +259,31 @@ export function DeckDetailPage() {
   for (const rows of buckets.values()) {
     rows.sort((a, b) => a.card.cmc - b.card.cmc || a.card.name.localeCompare(b.card.name))
   }
+
+  // Price = sum of known card prices (marked approximate if some are missing).
+  let priceTotal = 0
+  let pricedRows = 0
+  for (const row of d?.cards ?? []) {
+    if (row.card.priceUsd != null) {
+      priceTotal += row.card.priceUsd * row.quantity
+      pricedRows++
+    }
+  }
+  const priceLabel =
+    pricedRows === 0
+      ? null
+      : `${pricedRows < (d?.cards.length ?? 0) ? '~' : ''}$${priceTotal.toFixed(2)}`
+
+  // Mana curve (lands excluded, 7+ bucketed together, weighted by quantity).
+  const curve = Array.from({ length: 8 }, () => 0)
+  for (const row of d?.cards ?? []) {
+    if ((row.card.typeLine ?? '').split(' // ')[0].includes('Land')) continue
+    curve[Math.min(Math.max(Math.round(row.card.cmc), 0), 7)] += row.quantity
+  }
+  const maxCurve = Math.max(...curve, 1)
+  const hasCurve = curve.some((n) => n > 0)
+
+  const isOwner = !!d?.user && d.user.id === me.data?.id
 
   const art = d?.commander?.artCropUrl
 
@@ -222,7 +328,34 @@ export function DeckDetailPage() {
                     {d.commander?.name ?? 'No commander'}
                   </p>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  {d.cards.length > 0 && (
+                    <>
+                      <Button variant="outline" size="sm" onClick={copyList} title="Copy decklist">
+                        <Copy /> Copy list
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={downloadList}
+                        title="Download .txt"
+                      >
+                        <Download />
+                      </Button>
+                    </>
+                  )}
+                  {d.moxfieldUrl && isOwner && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => sync.mutate()}
+                      disabled={sync.isPending}
+                      title="Re-import from Moxfield"
+                    >
+                      <RefreshCw className={cn(sync.isPending && 'animate-spin')} />
+                      {sync.isPending ? 'Syncing…' : 'Sync'}
+                    </Button>
+                  )}
                   {d.moxfieldUrl && (
                     <a href={d.moxfieldUrl} target="_blank" rel="noreferrer">
                       <Button variant="outline" size="sm">
@@ -247,6 +380,11 @@ export function DeckDetailPage() {
                 <Badge variant="secondary">
                   <Layers className="h-3 w-3" /> {total} cards
                 </Badge>
+                {priceLabel && (
+                  <Badge variant="gold" title="Scryfall market prices (USD)">
+                    {priceLabel}
+                  </Badge>
+                )}
                 {d.archetype && <Badge variant="outline">{d.archetype}</Badge>}
                 {d.powerLevel != null && <Badge variant="outline">PL {d.powerLevel}</Badge>}
                 {d.bracket != null && <Badge variant="warning">Bracket {d.bracket}</Badge>}
@@ -261,6 +399,70 @@ export function DeckDetailPage() {
               </div>
             </div>
           </div>
+
+          {/* Deck shape: mana curve + type distribution */}
+          {d.cards.length > 0 && (
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Card>
+                <CardContent className="p-5">
+                  <h2 className="mb-3 text-sm font-semibold">Mana curve</h2>
+                  {hasCurve ? (
+                    <div className="flex h-24 items-end gap-1.5">
+                      {curve.map((n, cmc) => (
+                        <div key={cmc} className="flex flex-1 flex-col items-center gap-1">
+                          <span className="text-[10px] font-semibold tabular-nums text-muted-foreground">
+                            {n > 0 ? n : ''}
+                          </span>
+                          <div
+                            className={cn(
+                              'w-full rounded-t-md',
+                              n > 0 ? 'bg-primary/70' : 'bg-muted',
+                            )}
+                            style={{ height: `${Math.max((n / maxCurve) * 64, 3)}px` }}
+                          />
+                          <span className="text-[10px] tabular-nums text-muted-foreground">
+                            {cmc === 7 ? '7+' : cmc}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="py-6 text-center text-xs text-muted-foreground">No data</p>
+                  )}
+                </CardContent>
+              </Card>
+              <Card>
+                <CardContent className="p-5">
+                  <h2 className="mb-3 text-sm font-semibold">Card types</h2>
+                  {TYPE_ORDER.filter((k) => k !== 'Commander' && buckets.has(k)).map((key) => {
+                    const n = buckets.get(key)!.reduce((s, r) => s + r.quantity, 0)
+                    const maxType = Math.max(
+                      ...TYPE_ORDER.filter((k) => k !== 'Commander' && buckets.has(k)).map(
+                        (k) => buckets.get(k)!.reduce((s, r) => s + r.quantity, 0),
+                      ),
+                      1,
+                    )
+                    return (
+                      <div key={key} className="flex items-center gap-2 py-0.5 text-sm">
+                        <span className="w-24 shrink-0 truncate text-xs text-muted-foreground">
+                          {key}
+                        </span>
+                        <span className="h-2 flex-1 overflow-hidden rounded-full bg-muted">
+                          <span
+                            className="block h-full rounded-full bg-primary/70"
+                            style={{ width: `${Math.max((n / maxType) * 100, 4)}%` }}
+                          />
+                        </span>
+                        <span className="w-8 shrink-0 text-right text-xs font-semibold tabular-nums">
+                          {n}
+                        </span>
+                      </div>
+                    )
+                  })}
+                </CardContent>
+              </Card>
+            </div>
+          )}
 
           {/* Card list grouped by type */}
           {d.cards.length === 0 ? (

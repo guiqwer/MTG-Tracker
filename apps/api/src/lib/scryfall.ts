@@ -18,6 +18,7 @@ export interface ScryfallCard {
   cmc: number
   colorIdentity: string[]
   oracleText: string | null
+  priceUsd: number | null
 }
 
 function normalize(c: any): ScryfallCard {
@@ -26,6 +27,7 @@ function normalize(c: any): ScryfallCard {
   const oracleText =
     c.oracle_text ??
     (faces ? faces.map((f) => f.oracle_text).filter(Boolean).join('\n//\n') : null)
+  const price = parseFloat(c.prices?.usd ?? c.prices?.usd_foil ?? '')
   return {
     scryfallId: c.id,
     oracleId: c.oracle_id ?? null,
@@ -37,6 +39,7 @@ function normalize(c: any): ScryfallCard {
     cmc: typeof c.cmc === 'number' ? c.cmc : 0,
     colorIdentity: c.color_identity ?? [],
     oracleText: oracleText ?? null,
+    priceUsd: Number.isFinite(price) ? price : null,
   }
 }
 

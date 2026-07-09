@@ -102,6 +102,46 @@ async function resolveEntries(entries: ParsedEntry[]) {
   return { lookup, notFound }
 }
 
+// Shared by import and sync: commanders drive identity, mainboard rows are
+// aggregated by card, and fresh Scryfall prices are collected for updates.
+function buildDeckPayload(
+  parsed: ParsedDeck,
+  lookup: (
+    e: ParsedEntry,
+  ) => { scryfall: ScryfallCard; db: { id: string; colorIdentity: string[] } } | null,
+) {
+  const commanderCards = parsed.commanders
+    .map(lookup)
+    .filter((c): c is NonNullable<typeof c> => c !== null)
+  const commander = commanderCards[0] ?? null
+  const partner = commanderCards[1] ?? null
+  const colorIdentity = Array.from(
+    new Set(commanderCards.flatMap((c) => c.db.colorIdentity)),
+  )
+
+  const quantities = new Map<string, number>()
+  const prices = new Map<string, number>() // db card id -> fresh price
+  const add = (entry: ParsedEntry) => {
+    const hit = lookup(entry)
+    if (!hit) return
+    quantities.set(hit.db.id, (quantities.get(hit.db.id) ?? 0) + entry.quantity)
+    if (hit.scryfall.priceUsd != null) prices.set(hit.db.id, hit.scryfall.priceUsd)
+  }
+  for (const entry of parsed.mainboard) add(entry)
+  for (const c of commanderCards) {
+    if (!quantities.has(c.db.id)) quantities.set(c.db.id, 1)
+    if (c.scryfall.priceUsd != null) prices.set(c.db.id, c.scryfall.priceUsd)
+  }
+
+  return {
+    commander,
+    partner,
+    colorIdentity,
+    rows: [...quantities.entries()].map(([cardId, quantity]) => ({ cardId, quantity })),
+    prices,
+  }
+}
+
 export const decks = new Elysia({ prefix: '/decks' })
   .get(
     '/',
@@ -189,43 +229,17 @@ export const decks = new Elysia({ prefix: '/decks' })
         ...parsed.commanders,
         ...parsed.mainboard,
       ])
-
-      // Commander (+ optional partner) drive the deck's color identity.
-      const commanderCards = parsed.commanders
-        .map(lookup)
-        .filter((c): c is NonNullable<typeof c> => c !== null)
-      const commander = commanderCards[0] ?? null
-      const partner = commanderCards[1] ?? null
-      const colorIdentity = Array.from(
-        new Set(commanderCards.flatMap((c) => c.db.colorIdentity)),
-      )
-
-      // Aggregate main deck rows by card (a list may repeat basics).
-      const quantities = new Map<string, number>()
-      for (const entry of parsed.mainboard) {
-        const hit = lookup(entry)
-        if (!hit) continue
-        quantities.set(hit.db.id, (quantities.get(hit.db.id) ?? 0) + entry.quantity)
-      }
-      // Commanders are part of the 100 — keep them in the list too.
-      for (const c of commanderCards) {
-        if (!quantities.has(c.db.id)) quantities.set(c.db.id, 1)
-      }
+      const payload = buildDeckPayload(parsed, lookup)
 
       const deck = await prisma.deck.create({
         data: {
           name: body.name?.trim() || parsed.name || 'Imported deck',
           userId,
-          commanderId: commander?.db.id,
-          partnerId: partner?.db.id,
-          colorIdentity,
+          commanderId: payload.commander?.db.id,
+          partnerId: payload.partner?.db.id,
+          colorIdentity: payload.colorIdentity,
           moxfieldUrl: body.url?.trim() || undefined,
-          cards: {
-            create: [...quantities.entries()].map(([cardId, quantity]) => ({
-              cardId,
-              quantity,
-            })),
-          },
+          cards: { create: payload.rows },
         },
         include: deckInclude,
       })
@@ -240,6 +254,70 @@ export const decks = new Elysia({ prefix: '/decks' })
       }),
     },
   )
+  // Re-sync an imported deck from its Moxfield source (owner only). Replaces
+  // the card list, refreshes commander/identity and card prices.
+  .post('/:id/sync', async ({ headers, params, set }) => {
+    const userId = await requireUserId(headers.authorization)
+    const deck = await prisma.deck.findUnique({
+      where: { id: params.id },
+      include: { owner: true },
+    })
+    if (!deck || !(await canAccessDeck(userId, deck))) {
+      set.status = 404
+      return NOT_FOUND
+    }
+    if (deck.userId !== userId) {
+      set.status = 403
+      return { error: 'forbidden', error_description: 'Only the deck owner can sync it' }
+    }
+    const publicId = deck.moxfieldUrl ? parseMoxfieldUrl(deck.moxfieldUrl) : null
+    if (!publicId) {
+      set.status = 400
+      return {
+        error: 'not_linked',
+        error_description: 'This deck is not linked to a Moxfield list',
+      }
+    }
+    let parsed: ParsedDeck
+    try {
+      parsed = await fetchMoxfieldDeck(publicId)
+    } catch (e) {
+      set.status = 502
+      return {
+        error: 'moxfield_failed',
+        error_description: `Could not fetch the deck from Moxfield (${
+          e instanceof Error ? e.message : 'unknown error'
+        })`,
+      }
+    }
+    const { lookup, notFound } = await resolveEntries([
+      ...parsed.commanders,
+      ...parsed.mainboard,
+    ])
+    const payload = buildDeckPayload(parsed, lookup)
+
+    // One transaction: fresh prices, swap the list, update the header fields.
+    await prisma.$transaction([
+      ...[...payload.prices.entries()].map(([id, priceUsd]) =>
+        prisma.card.update({ where: { id }, data: { priceUsd } }),
+      ),
+      prisma.deckCard.deleteMany({ where: { deckId: deck.id } }),
+      prisma.deck.update({
+        where: { id: deck.id },
+        data: {
+          commanderId: payload.commander?.db.id ?? null,
+          partnerId: payload.partner?.db.id ?? null,
+          colorIdentity: payload.colorIdentity,
+          cards: { create: payload.rows },
+        },
+      }),
+    ])
+    const fresh = await prisma.deck.findUnique({
+      where: { id: deck.id },
+      include: deckInclude,
+    })
+    return { deck: (await withCardCounts([fresh!]))[0], notFound }
+  })
   // Deck detail with its full card list (the deck-view page groups by type).
   .get('/:id', async ({ headers, params, set }) => {
     const userId = await requireUserId(headers.authorization)
