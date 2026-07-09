@@ -304,7 +304,7 @@ export function MatchDetailPage() {
                           <Button
                             variant="ghost"
                             size="icon"
-                            className="h-7 w-7 shrink-0 opacity-0 transition-opacity group-hover:opacity-100"
+                            className="h-7 w-7 shrink-0 transition-opacity sm:opacity-0 sm:group-hover:opacity-100"
                             onClick={() => delEvent.mutate(ev.id)}
                             title="Remove event"
                           >

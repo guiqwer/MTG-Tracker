@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { Plus, Swords, Trophy, X, Clock, Hash, ChevronRight } from 'lucide-react'
+import { Plus, Swords, Trash2, Trophy, X, Clock, Hash, ChevronRight } from 'lucide-react'
 import { api } from '@/lib/eden'
 import { cn } from '@/lib/utils'
 import { useActiveGroup } from '@/lib/group'
@@ -356,7 +356,7 @@ export function MatchesPage() {
                         <Button
                           variant="ghost"
                           size="icon"
-                          className="h-7 w-7 opacity-0 transition-opacity group-hover:opacity-100"
+                          className="h-7 w-7 transition-opacity sm:opacity-0 sm:group-hover:opacity-100"
                           onClick={(e) => {
                             e.preventDefault()
                             e.stopPropagation()
@@ -364,7 +364,7 @@ export function MatchesPage() {
                           }}
                           title="Remove match"
                         >
-                          <X className="h-4 w-4 text-destructive" />
+                          <Trash2 className="h-4 w-4 text-destructive" />
                         </Button>
                       </div>
                     </div>

@@ -125,7 +125,7 @@ export function PlayersPage() {
       ) : (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {players.data.map((p) => (
-            <Card key={p.id} className="group">
+            <Card key={p.id} className="group transition-shadow hover:shadow-md">
               <CardContent className="flex items-center gap-3 p-3.5">
                 <Avatar name={p.name} color={p.avatarColor} size={40} />
                 <div className="min-w-0 flex-1">
@@ -139,7 +139,7 @@ export function PlayersPage() {
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="h-8 w-8 opacity-0 transition-opacity group-hover:opacity-100"
+                  className="h-8 w-8 transition-opacity sm:opacity-0 sm:group-hover:opacity-100"
                   onClick={() => remove.mutate(p.id)}
                   title="Remove"
                 >

@@ -256,9 +256,9 @@ export function DashboardPage() {
           )}
         </div>
         <Card>
-          <CardContent className="flex items-center gap-5 px-5 py-3">
+          <CardContent className="grid w-full grid-cols-2 gap-x-6 gap-y-3 px-5 py-3.5 sm:flex sm:w-auto sm:items-center sm:gap-5 sm:py-3">
             {counters.map((s, i) => (
-              <div key={s.label} className={cn('flex items-center gap-2.5', i > 0 && 'border-l border-border/60 pl-5')}>
+              <div key={s.label} className={cn('flex items-center gap-2.5', i > 0 && 'sm:border-l sm:border-border/60 sm:pl-5')}>
                 <div className={cn('flex h-8 w-8 items-center justify-center rounded-lg', s.chip)}>
                   <s.icon className="h-4 w-4" />
                 </div>
@@ -287,8 +287,8 @@ export function DashboardPage() {
                         <Icon className="h-4 w-4" />
                       </div>
                       <div className="min-w-0">
-                        <div className="truncate text-sm font-semibold">{p.title}</div>
-                        <div className="truncate text-[11px] text-muted-foreground">{p.desc}</div>
+                        <div className="truncate text-[13px] font-semibold leading-tight">{p.title}</div>
+                        <div className="truncate text-[10.5px] text-muted-foreground">{p.desc}</div>
                       </div>
                     </div>
                     <div className="mt-3 flex items-center gap-2">
