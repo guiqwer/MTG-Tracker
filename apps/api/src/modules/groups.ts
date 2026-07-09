@@ -3,6 +3,7 @@ import { prisma } from '../lib/prisma'
 import { requireUserId } from '../security/tokens'
 import { generateInviteCode } from '../lib/invite'
 import { isUniqueViolation } from '../lib/prisma-errors'
+import { ensureMemberPlayer } from '../lib/players'
 
 // Owners are listed before members; ties break by join date.
 const ROLE_RANK: Record<string, number> = { OWNER: 0, MEMBER: 1 }
@@ -35,13 +36,16 @@ export const groups = new Elysia({ prefix: '/groups' })
       const userId = await requireUserId(headers.authorization)
       for (let attempt = 0; attempt < 5; attempt++) {
         try {
-          return await prisma.group.create({
+          const group = await prisma.group.create({
             data: {
               name: body.name.trim(),
               inviteCode: generateInviteCode(),
               memberships: { create: { userId, role: 'OWNER' } },
             },
           })
+          // The creator immediately gets their seat at the table.
+          await ensureMemberPlayer(group.id, userId)
+          return group
         } catch (e) {
           if (isUniqueViolation(e) && attempt < 4) continue
           throw e
@@ -85,6 +89,8 @@ export const groups = new Elysia({ prefix: '/groups' })
         }
         throw e
       }
+      // New members get their seat at the table right away.
+      await ensureMemberPlayer(group.id, userId)
       return { id: group.id, name: group.name, inviteCode: group.inviteCode }
     },
     { body: t.Object({ inviteCode: t.String({ minLength: 3, maxLength: 40 }) }) },
