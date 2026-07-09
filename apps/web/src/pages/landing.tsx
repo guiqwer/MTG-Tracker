@@ -10,6 +10,7 @@ import {
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { ThemeToggle } from '@/components/theme-toggle'
+import { LogoMark } from '@/components/logo'
 import { currentAccent, ACCENT_IMAGE } from '@/lib/accent'
 
 const FEATURES = [
@@ -51,7 +52,7 @@ function PublicNav() {
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 sm:px-8">
         <Link to="/" className="flex items-center gap-2.5">
           <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-sm shadow-primary/30">
-            <i className="ms ms-u" />
+            <LogoMark />
           </div>
           <span className="text-[15px] font-bold tracking-tight">
             Magic Match <span className="font-medium text-muted-foreground">Tracker</span>
@@ -148,7 +149,7 @@ export function LandingPage() {
             </Link>
             <Link to="/login">
               <Button size="lg" variant="outline">
-                Try the demo <ArrowRight />
+                Log in <ArrowRight />
               </Button>
             </Link>
           </div>
@@ -217,7 +218,7 @@ export function LandingPage() {
         <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-3 px-4 py-8 text-sm text-muted-foreground sm:flex-row sm:px-8">
           <div className="flex items-center gap-2">
             <div className="flex h-6 w-6 items-center justify-center rounded-md bg-primary text-xs text-primary-foreground">
-              <i className="ms ms-u" />
+              <LogoMark />
             </div>
             Magic Match Tracker
           </div>

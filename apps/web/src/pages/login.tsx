@@ -53,7 +53,7 @@ export function LoginPage() {
             autoComplete="username"
             value={identifier}
             onChange={(e) => setIdentifier(e.target.value)}
-            placeholder="demo"
+            placeholder="username or you@example.com"
           />
         </div>
         <div className="grid gap-1.5">
@@ -71,10 +71,6 @@ export function LoginPage() {
           {loading ? 'Signing in…' : 'Log in'}
         </Button>
       </form>
-      <p className="mt-3 text-center text-xs text-muted-foreground">
-        Try the demo — <span className="font-medium">demo</span> /{' '}
-        <span className="font-medium">password12</span>
-      </p>
     </AuthShell>
   )
 }

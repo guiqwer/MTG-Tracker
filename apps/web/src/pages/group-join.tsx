@@ -60,7 +60,7 @@ export function JoinGroupPage() {
                 id="invite-code"
                 value={code}
                 onChange={(e) => setCode(e.target.value.toUpperCase())}
-                placeholder="e.g. DEMOPOD"
+                placeholder="e.g. K7QX9RT"
                 autoComplete="off"
                 autoCapitalize="characters"
                 className="font-mono tracking-wider"

@@ -2,6 +2,7 @@ import { Link, NavLink, Outlet, useLocation } from 'react-router-dom'
 import { LayoutDashboard, Users, Layers, Swords } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { GroupProvider } from '@/lib/group'
+import { LogoMark } from '@/components/logo'
 import { GroupSwitcher } from '@/components/group-switcher'
 import { ThemeToggle } from '@/components/theme-toggle'
 import { UserMenu } from '@/components/user-menu'
@@ -22,7 +23,7 @@ export function Layout() {
         <div className="mx-auto flex h-16 max-w-6xl items-center gap-4 px-4 sm:gap-6 sm:px-8">
           <Link to="/app" className="flex items-center gap-2.5">
             <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-sm shadow-primary/30">
-              <i className="ms ms-u" />
+              <LogoMark />
             </div>
             <span className="hidden text-[15px] font-bold tracking-tight sm:block">
               Magic Match{' '}

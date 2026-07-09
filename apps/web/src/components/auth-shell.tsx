@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { ChevronLeft } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
+import { LogoMark } from '@/components/logo'
 
 export function AuthShell({
   title,
@@ -25,7 +26,7 @@ export function AuthShell({
         </Link>
         <div className="mb-6 flex items-center gap-2.5">
           <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-sm shadow-primary/30">
-            <i className="ms ms-u" />
+            <LogoMark />
           </div>
           <span className="text-lg font-bold tracking-tight">
             Magic Match <span className="font-medium text-muted-foreground">Tracker</span>
