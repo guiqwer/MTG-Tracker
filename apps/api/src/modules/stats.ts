@@ -21,7 +21,15 @@ export const stats = new Elysia({ prefix: '/stats' })
       const groupId = query.groupId
       const [players, decks, matches, events, agg] = await Promise.all([
         prisma.player.count({ where: { groupId } }),
-        prisma.deck.count({ where: { owner: { groupId } } }),
+        // Same scope as GET /decks: table decks + members' personal decks.
+        prisma.deck.count({
+          where: {
+            OR: [
+              { owner: { groupId } },
+              { user: { memberships: { some: { groupId } } } },
+            ],
+          },
+        }),
         prisma.match.count({ where: { groupId } }),
         prisma.matchEvent.count({ where: { match: { groupId } } }),
         prisma.match.aggregate({

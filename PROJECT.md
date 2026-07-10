@@ -127,7 +127,6 @@ Current design assumptions: pods of ~4–20 people, dozens of groups, thousands 
 
 ### Stage 3 — beyond
 - The API is **stateless** (JWT, no sessions) → horizontal scale is trivial behind the existing nginx; only the DB is shared state
-- Live match mode (roadmap) introduces WebSockets: prefer a single "table host" connection model; sticky sessions or a pub/sub layer if multi-instance
 - Static/art to object storage + CDN; card images already come from Scryfall's CDN
 - Data growth is inherently small: a match ≈ 1 + 4 participants + ~10 events rows; the global card cache tops out at ~30k rows (all of Magic)
 
@@ -140,11 +139,9 @@ Current design assumptions: pods of ~4–20 people, dozens of groups, thousands 
 | Priority | Feature | Status |
 |----------|---------|--------|
 | done | Deck tools (price, sync, charts, copy/export) + flow gaps (match edit, claim, CSV) | shipped 2026-07-09 |
-| next | **Live match mode** — life/commander damage/poison at the table, finish → auto-creates the match | backlog |
-| next | **Seasons + achievements** — periodic leaderboards, champion badges, achievement system | backlog |
-| later | Notifications / group activity feed | backlog |
-| later | Password reset via email, refresh tokens, rate limiting | backlog (see §3) |
-| later | PWA (installable, offline shell) | backlog |
+| next | Notifications / group activity feed | backlog |
+| next | Password reset via email, refresh tokens, rate limiting | backlog (see §3) |
+| next | PWA (installable, offline shell) | backlog |
 
 ---
 
@@ -157,11 +154,11 @@ Independent workstreams, each self-contained enough for one agent/dev. Dependenc
 2. **T2** Authorization regression matrix as table-driven tests (every endpoint × outsider/member/owner) — *size S, after T1*
 3. **T3** Playwright E2E in CI style: login → create group → add guest → log match → dashboard renders (the scripts in this repo's history are the blueprint) — *size M, independent*
 
-### L — Live match mode (flagship)
-1. **L1** Design doc: table session model (host device vs per-player), reconnection, storage (a `LiveSession` table vs in-memory) — *size S*
-2. **L2** API: session endpoints + WebSocket (Elysia `.ws()`) for state broadcast — *size L, after L1*
-3. **L3** UI: table screen (life totals, commander damage grid, poison, turn tracker), finish → prefilled match form — *size L, after L2*
-4. **L4** Fallback polling mode for flaky venue Wi-Fi — *size S, after L3*
+### E — Event timeline ergonomics (replaces the dropped live-match idea)
+Real-time play is **out of scope**; the product tracks *decisions taken during the match* via the event timeline. Make that faster to use:
+1. **E1** Quick-log UX: one-tap event buttons (removal/counter/wipe…) with last-used actor preselected — *size S*
+2. **E2** Log events while the match is still open (create match first, timeline as you play, finish by filling the podium) — *size M*
+3. **E3** Timeline insights: per-player decision patterns on the profile (already partially there via titles) — *size S*
 
 ### S — Seasons & achievements
 1. **S1** Schema: `Season` (groupId, name, startsAt, endsAt) + season filter on stats endpoints (`?seasonId=`) — *size M*
@@ -175,7 +172,7 @@ Independent workstreams, each self-contained enough for one agent/dev. Dependenc
 4. **H4** Backup story: verify PDC volume backups or add pg_dump cron to compose — *size S*
 5. **H5** Password reset (needs SMTP decision first) — *size M, blocked on infra*
 
-Suggested parallelization: one agent on **T1–T2** (foundation), one on **H1–H3**, design review on **L1** with the owner before L2/L3. S can start anytime.
+Suggested parallelization: one agent on **T1–T2** (foundation), one on **H1–H3**; **E** and **S** can start anytime.
 
 ---
 
