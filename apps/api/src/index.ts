@@ -24,7 +24,7 @@ export const app = new Elysia()
       return denied.body
     }
   })
-  .get('/', () => ({ name: 'Magic Match Tracker API', status: 'ok' }))
+  .get('/', () => ({ name: 'ManaLog API', status: 'ok' }))
   .get('/health', () => ({ status: 'ok', time: new Date().toISOString() }))
   .use(auth)
   .use(groups)
@@ -38,7 +38,7 @@ export const app = new Elysia()
   .listen({ port: Number(process.env.PORT ?? 3000), hostname: '0.0.0.0' })
 
 console.log(
-  `🚀 Magic Match Tracker API running on http://localhost:${app.server?.port}`,
+  `🚀 ManaLog API running on http://localhost:${app.server?.port}`,
 )
 
 // Warm Scryfall oracle tags for cards imported before the tagging feature —

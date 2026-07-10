@@ -29,7 +29,7 @@ export function AuthShell({
             <LogoMark />
           </div>
           <span className="text-lg font-bold tracking-tight">
-            Magic Match <span className="font-medium text-muted-foreground">Tracker</span>
+            Mana<span className="font-medium text-muted-foreground">Log</span>
           </span>
         </div>
         <Card>

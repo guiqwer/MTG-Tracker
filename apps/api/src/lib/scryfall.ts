@@ -3,7 +3,7 @@
 const BASE = 'https://api.scryfall.com'
 
 const HEADERS = {
-  'User-Agent': 'MagicMatchTracker/0.1',
+  'User-Agent': 'ManaLog/0.1',
   Accept: 'application/json',
 }
 

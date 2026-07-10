@@ -27,8 +27,7 @@ export function Layout() {
               <LogoMark />
             </div>
             <span className="hidden text-[15px] font-bold tracking-tight sm:block">
-              Magic Match{' '}
-              <span className="font-medium text-muted-foreground">Tracker</span>
+              Mana<span className="font-medium text-muted-foreground">Log</span>
             </span>
           </Link>
 

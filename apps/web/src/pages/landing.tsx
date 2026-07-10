@@ -55,7 +55,7 @@ function PublicNav() {
             <LogoMark />
           </div>
           <span className="text-[15px] font-bold tracking-tight">
-            Magic Match <span className="font-medium text-muted-foreground">Tracker</span>
+            Mana<span className="font-medium text-muted-foreground">Log</span>
           </span>
         </Link>
         <div className="flex items-center gap-2">
@@ -224,7 +224,7 @@ export function LandingPage() {
             <div className="flex h-6 w-6 items-center justify-center rounded-md bg-primary text-xs text-primary-foreground">
               <LogoMark />
             </div>
-            Magic Match Tracker
+            ManaLog
           </div>
           <p className="text-xs">
             Unofficial fan project — not affiliated with Wizards of the Coast.
