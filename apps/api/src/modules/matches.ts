@@ -212,6 +212,20 @@ export const matches = new Elysia({ prefix: '/matches' })
         set.status = 404
         return NOT_FOUND
       }
+      // A response must chain to an event of this same match (the stack).
+      if (body.respondsToId) {
+        const parent = await prisma.matchEvent.findUnique({
+          where: { id: body.respondsToId },
+          select: { matchId: true },
+        })
+        if (parent?.matchId !== params.id) {
+          set.status = 400
+          return {
+            error: 'invalid_response',
+            error_description: 'respondsToId must reference an event of this match',
+          }
+        }
+      }
       const last = await prisma.matchEvent.findFirst({
         where: { matchId: params.id },
         orderBy: { sequence: 'desc' },
@@ -228,6 +242,7 @@ export const matches = new Elysia({ prefix: '/matches' })
           targetId: body.targetId || undefined,
           cardId: card?.id,
           note: body.note || undefined,
+          respondsToId: body.respondsToId || undefined,
         },
         include: {
           actor: { include: { player: true } },
@@ -244,6 +259,7 @@ export const matches = new Elysia({ prefix: '/matches' })
         targetId: t.Optional(t.String()),
         cardScryfallId: t.Optional(t.String()),
         note: t.Optional(t.String()),
+        respondsToId: t.Optional(t.String()),
       }),
     },
   )

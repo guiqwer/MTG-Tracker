@@ -247,6 +247,11 @@ model MatchEvent {
   cardId    String?
   card      Card?             @relation(fields: [cardId], references: [id])
   note      String?
+  // Stack: an event can respond to another (counter a spell, counter the
+  // counter…). Deleting the parent keeps responses as roots.
+  respondsToId String?
+  respondsTo   MatchEvent?  @relation("EventResponses", fields: [respondsToId], references: [id], onDelete: SetNull)
+  responses    MatchEvent[] @relation("EventResponses")
   createdAt DateTime          @default(now())
 
   @@index([matchId, sequence])

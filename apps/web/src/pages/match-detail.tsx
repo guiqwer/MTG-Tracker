@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
@@ -8,11 +8,13 @@ import {
   BookOpen,
   ChevronLeft,
   Clock,
+  CornerDownRight,
   Crown,
   Flame,
   Hash,
   Infinity as InfinityIcon,
   Plus,
+  Reply,
   Search,
   Flag,
   Pencil,
@@ -140,6 +142,7 @@ export function MatchDetailPage() {
         turn: turn ? Number(turn) : undefined,
         cardScryfallId: card?.scryfallId,
         note: note || undefined,
+        respondsToId: respondTo?.id,
       })
       if (error) throw error
       return data && 'error' in data ? null : data
@@ -148,6 +151,7 @@ export function MatchDetailPage() {
       toast.success('Event added to timeline')
       setNote('')
       setCard(null)
+      setRespondTo(null)
       invalidate()
     },
     onError: () => toast.error('Could not add the event'),
@@ -216,6 +220,128 @@ export function MatchDetailPage() {
     (type === 'COMMANDER_CAST' || type === 'COMMANDER_DIED') && actor?.deck?.commander
       ? actor.deck.commander
       : null
+
+  // The stack: events chained via respondsToId render as nested responses.
+  const [respondTo, setRespondTo] = useState<{ id: string; label: string } | null>(null)
+  const eventTree = useMemo(() => {
+    const ids = new Set(events.map((e) => e.id))
+    const byParent = new Map<string, typeof events>()
+    const roots: typeof events = []
+    for (const ev of events) {
+      if (ev.respondsToId && ids.has(ev.respondsToId)) {
+        const list = byParent.get(ev.respondsToId) ?? []
+        list.push(ev)
+        byParent.set(ev.respondsToId, list)
+      } else {
+        roots.push(ev)
+      }
+    }
+    return { roots, byParent }
+  }, [events])
+  // An event fizzles when an (itself uncountered) COUNTER responds to it —
+  // responses always come later in sequence, so one reverse pass suffices.
+  const fizzled = useMemo(() => {
+    const out = new Set<string>()
+    for (let i = events.length - 1; i >= 0; i--) {
+      const ev = events[i]
+      const kids = eventTree.byParent.get(ev.id) ?? []
+      if (kids.some((k) => k.type === 'COUNTER' && !out.has(k.id))) out.add(ev.id)
+    }
+    return out
+  }, [events, eventTree])
+
+  const startResponse = (ev: (typeof events)[number]) => {
+    const what = ev.card?.name ?? EVENT_META[ev.type]?.label ?? ev.type
+    const who = ev.actor ? ` by ${ev.actor.player.name}` : ''
+    setRespondTo({ id: ev.id, label: `${what}${who}` })
+    setType('COUNTER')
+    if (ev.actorId) setTargetId(ev.actorId)
+    setCard(null)
+  }
+
+  const renderEvent = (ev: (typeof events)[number]): ReactNode => {
+    const meta = EVENT_META[ev.type] ?? {
+      label: ev.type,
+      icon: Zap,
+      tint: 'text-muted-foreground',
+    }
+    const Icon = meta.icon
+    const kids = eventTree.byParent.get(ev.id) ?? []
+    const countered = fizzled.has(ev.id)
+    return (
+      <li key={ev.id}>
+        <div
+          className={cn(
+            'group flex items-start gap-3 rounded-lg border border-border/60 bg-muted/40 p-2.5',
+            countered && 'opacity-75',
+          )}
+        >
+          <div
+            className={cn(
+              'mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-muted',
+              meta.tint,
+            )}
+          >
+            <Icon className="h-4 w-4" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2">
+              <span className={cn('text-sm font-semibold', countered && 'line-through')}>
+                {meta.label}
+              </span>
+              {countered && (
+                <Badge variant="outline" className="border-destructive/40 text-destructive">
+                  Countered
+                </Badge>
+              )}
+              {ev.turn != null && <Badge variant="outline">Turn {ev.turn}</Badge>}
+            </div>
+            <div className="mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs text-muted-foreground">
+              {ev.actor && (
+                <span className="font-medium text-foreground/80">{ev.actor.player.name}</span>
+              )}
+              {ev.target && (
+                <>
+                  <ArrowRight className="h-3 w-3" />
+                  <span className="font-medium text-foreground/80">{ev.target.player.name}</span>
+                </>
+              )}
+              {ev.card && (
+                <span className={cn(countered && 'line-through')}>· {ev.card.name}</span>
+              )}
+            </div>
+            {ev.note && <p className="mt-1 text-xs text-muted-foreground">{ev.note}</p>}
+          </div>
+          {ev.card?.artCropUrl && (
+            <img src={ev.card.artCropUrl} alt="" className="h-9 w-14 rounded object-cover" />
+          )}
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7 shrink-0 transition-opacity sm:opacity-0 sm:group-hover:opacity-100"
+            onClick={() => startResponse(ev)}
+            title="Respond (add to the stack)"
+          >
+            <Reply className="h-3.5 w-3.5 text-primary" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7 shrink-0 transition-opacity sm:opacity-0 sm:group-hover:opacity-100"
+            onClick={() => delEvent.mutate(ev.id)}
+            title="Remove event"
+          >
+            <Trash2 className="h-3.5 w-3.5 text-destructive" />
+          </Button>
+        </div>
+        {kids.length > 0 && (
+          <ol className="ml-4 mt-2 space-y-2 border-l-2 border-border/70 pl-3">
+            {kids.map((k) => renderEvent(k))}
+          </ol>
+        )}
+      </li>
+    )
+  }
 
   // While a table is live, warm every seat's deck tags so the select is
   // instant on first use (server dedupes + caches, so this is cheap).
@@ -464,72 +590,7 @@ export function MatchDetailPage() {
                     No events yet. Use the panel on the right to log the first one.
                   </p>
                 ) : (
-                  <ol className="space-y-2">
-                    {events.map((ev) => {
-                      const meta = EVENT_META[ev.type] ?? {
-                        label: ev.type,
-                        icon: Zap,
-                        tint: 'text-muted-foreground',
-                      }
-                      const Icon = meta.icon
-                      return (
-                        <li
-                          key={ev.id}
-                          className="group flex items-start gap-3 rounded-lg border border-border/60 bg-muted/40 p-2.5"
-                        >
-                          <div
-                            className={cn(
-                              'mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-muted',
-                              meta.tint,
-                            )}
-                          >
-                            <Icon className="h-4 w-4" />
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-center gap-2">
-                              <span className="text-sm font-semibold">{meta.label}</span>
-                              {ev.turn != null && <Badge variant="outline">Turn {ev.turn}</Badge>}
-                            </div>
-                            <div className="mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs text-muted-foreground">
-                              {ev.actor && (
-                                <span className="font-medium text-foreground/80">
-                                  {ev.actor.player.name}
-                                </span>
-                              )}
-                              {ev.target && (
-                                <>
-                                  <ArrowRight className="h-3 w-3" />
-                                  <span className="font-medium text-foreground/80">
-                                    {ev.target.player.name}
-                                  </span>
-                                </>
-                              )}
-                              {ev.card && <span>· {ev.card.name}</span>}
-                            </div>
-                            {ev.note && (
-                              <p className="mt-1 text-xs text-muted-foreground">{ev.note}</p>
-                            )}
-                          </div>
-                          {ev.card?.artCropUrl && (
-                            <img
-                              src={ev.card.artCropUrl}
-                              alt=""
-                              className="h-9 w-14 rounded object-cover"
-                            />
-                          )}
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-7 w-7 shrink-0 transition-opacity sm:opacity-0 sm:group-hover:opacity-100"
-                            onClick={() => delEvent.mutate(ev.id)}
-                            title="Remove event"
-                          >
-                            <Trash2 className="h-3.5 w-3.5 text-destructive" />
-                          </Button>
-                        </li>
-                      )
-                    })}
-                  </ol>
+                  <ol className="space-y-2">{eventTree.roots.map((ev) => renderEvent(ev))}</ol>
                 )}
               </CardContent>
             </Card>
@@ -538,6 +599,24 @@ export function MatchDetailPage() {
             <Card className="h-fit lg:sticky lg:top-8">
               <CardContent className="space-y-3 p-4">
                 <h2 className="text-base font-semibold">Add event</h2>
+
+                {respondTo && (
+                  <div className="flex items-center gap-2 rounded-md border border-primary/40 bg-primary/5 p-2 text-xs">
+                    <CornerDownRight className="h-3.5 w-3.5 shrink-0 text-primary" />
+                    <span className="min-w-0 flex-1 truncate">
+                      Responding to <span className="font-medium">{respondTo.label}</span>
+                    </span>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-6 w-6 shrink-0"
+                      onClick={() => setRespondTo(null)}
+                      title="Cancel response"
+                    >
+                      <X className="h-3 w-3" />
+                    </Button>
+                  </div>
+                )}
 
                 <div className="grid gap-1.5">
                   <Label>Type</Label>

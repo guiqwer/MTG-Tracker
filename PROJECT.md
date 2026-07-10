@@ -37,6 +37,7 @@
 - Post-game logging with **podium** (placement per seat, the way Commander actually plays), duration/turns/win condition/end reason
 - **Event timeline** per match: removals, counters, tutors, wipes, ramp, draws, combos… with actor, target and card (Scryfall picker)
 - **Deck-aware card picker** on the event form: the card field is a select of the actor's deck — narrowed to matching cards for tagged types (removal/counter/tutor/wipe/ramp/draw) via Scryfall Tagger otags cached per card (`Card.oracleTags`, tagged once in background at import), full deck for untagged types; commander events quick-pick the deck's commander
+- **The stack**: any event can respond to another (`MatchEvent.respondsToId`) — "Respond" on a timeline event pre-fills the form (type Counter, target = original actor); response chains render nested, and an event with an uncountered Counter on it shows struck-through as **Countered** (counter wars resolve correctly)
 - **Edit after the fact**: metadata and placements
 - **CSV export** of the group's full history (one row per seat)
 
