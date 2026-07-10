@@ -36,7 +36,6 @@ import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Avatar } from '@/components/ui/avatar'
-import { ColorIdentity } from '@/components/mana'
 
 const EVENT_META: Record<string, { label: string; icon: LucideIcon; tint: string }> = {
   REMOVAL: { label: 'Removal', icon: Zap, tint: 'text-red-400' },
@@ -124,18 +123,7 @@ export function MatchDetailPage() {
   const [targetId, setTargetId] = useState('')
   const [turn, setTurn] = useState('')
   const [note, setNote] = useState('')
-  const [cardQuery, setCardQuery] = useState('')
   const [card, setCard] = useState<CardPick | null>(null)
-
-  const cardSearch = useQuery({
-    queryKey: ['cards', 'any', cardQuery],
-    enabled: cardQuery.trim().length >= 3 && !card,
-    queryFn: async () => {
-      const { data, error } = await api.cards.search.get({ query: { q: cardQuery } })
-      if (error) throw error
-      return data
-    },
-  })
 
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: ['match', matchId] })
@@ -160,7 +148,6 @@ export function MatchDetailPage() {
       toast.success('Event added to timeline')
       setNote('')
       setCard(null)
-      setCardQuery('')
       invalidate()
     },
     onError: () => toast.error('Could not add the event'),
@@ -211,17 +198,20 @@ export function MatchDetailPage() {
   const eventTag = EVENT_TAG[type]
   const deckTags = useQuery({
     queryKey: ['deck-card-tags', actorDeckId],
-    enabled: !!actorDeckId && !!eventTag,
+    enabled: !!actorDeckId,
     staleTime: Infinity,
     queryFn: () => fetchDeckTags(actorDeckId!),
   })
-  const suggestions = useMemo(
-    () =>
-      eventTag && deckTags.data
-        ? deckTags.data.filter((c) => c.oracleTags.includes(eventTag))
-        : [],
-    [eventTag, deckTags.data],
-  )
+  // Tagged types narrow the select to matching cards; untagged types (or a
+  // tag with zero hits in this deck) fall back to the full list.
+  const suggestions = useMemo(() => {
+    if (!deckTags.data) return []
+    if (!eventTag) return deckTags.data
+    const tagged = deckTags.data.filter((c) => c.oracleTags.includes(eventTag))
+    return tagged.length ? tagged : deckTags.data
+  }, [eventTag, deckTags.data])
+  const narrowed =
+    !!eventTag && suggestions.length > 0 && suggestions.length < (deckTags.data?.length ?? 0)
   const commanderPick =
     (type === 'COMMANDER_CAST' || type === 'COMMANDER_DIED') && actor?.deck?.commander
       ? actor.deck.commander
@@ -635,7 +625,15 @@ export function MatchDetailPage() {
                           <span className="truncate">{commanderPick.name}</span>
                         </Button>
                       )}
-                      {eventTag && actorDeckId && suggestions.length > 0 && (
+                      {!actorId ? (
+                        <p className="text-xs text-muted-foreground">
+                          Pick an actor to choose a card from their deck.
+                        </p>
+                      ) : deckTags.isLoading ? (
+                        <p className="text-xs text-muted-foreground">
+                          Scanning {actor?.player.name}'s deck…
+                        </p>
+                      ) : suggestions.length > 0 ? (
                         <select
                           className={cn(selectCls, 'w-full')}
                           value=""
@@ -650,8 +648,9 @@ export function MatchDetailPage() {
                           }}
                         >
                           <option value="" disabled>
-                            {EVENT_META[type].label} in {actor?.player.name}'s deck (
-                            {suggestions.length})…
+                            {narrowed
+                              ? `${EVENT_META[type].label} in ${actor?.player.name}'s deck (${suggestions.length})…`
+                              : `${actor?.player.name}'s deck (${suggestions.length} cards)…`}
                           </option>
                           {suggestions.map((c) => (
                             <option key={c.scryfallId} value={c.scryfallId}>
@@ -659,55 +658,11 @@ export function MatchDetailPage() {
                             </option>
                           ))}
                         </select>
-                      )}
-                      {eventTag && actorDeckId && deckTags.isLoading && (
+                      ) : (
                         <p className="text-xs text-muted-foreground">
-                          Scanning {actor?.player.name}'s deck for{' '}
-                          {EVENT_META[type].label.toLowerCase()} cards…
+                          No card list available for this deck.
                         </p>
                       )}
-                      {eventTag && !actorId && (
-                        <p className="text-xs text-muted-foreground">
-                          Pick an actor to suggest cards from their deck.
-                        </p>
-                      )}
-                    <div className="relative">
-                      <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                      <Input
-                        value={cardQuery}
-                        onChange={(e) => setCardQuery(e.target.value)}
-                        placeholder={
-                          suggestions.length > 0 || commanderPick
-                            ? 'Or search any card…'
-                            : 'Search card…'
-                        }
-                        className="pl-8"
-                      />
-                      {cardSearch.data && cardSearch.data.length > 0 && (
-                        <div className="absolute z-10 mt-1 max-h-56 w-full overflow-auto rounded-md border bg-popover shadow-xl">
-                          {cardSearch.data.map((c) => (
-                            <button
-                              key={c.scryfallId}
-                              type="button"
-                              onClick={() =>
-                                setCard({
-                                  scryfallId: c.scryfallId,
-                                  name: c.name,
-                                  artCropUrl: c.artCropUrl,
-                                })
-                              }
-                              className="flex w-full cursor-pointer items-center gap-2 px-3 py-2 text-left transition-colors hover:bg-accent"
-                            >
-                              {c.artCropUrl && (
-                                <img src={c.artCropUrl} alt="" className="h-7 w-11 rounded object-cover" />
-                              )}
-                              <span className="flex-1 truncate text-sm">{c.name}</span>
-                              <ColorIdentity colors={c.colorIdentity} />
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                    </div>
                     </div>
                   )}
                 </div>
