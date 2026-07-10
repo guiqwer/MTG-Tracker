@@ -36,6 +36,7 @@
 ### Matches
 - Post-game logging with **podium** (placement per seat, the way Commander actually plays), duration/turns/win condition/end reason
 - **Event timeline** per match: removals, counters, tutors, wipes, ramp, draws, combos… with actor, target and card (Scryfall picker)
+- **Deck-aware card suggestions** on the event form: tagged types (removal/counter/tutor/wipe/ramp/draw) offer a select of matching cards from the actor's deck, via Scryfall Tagger otags cached per card (`Card.oracleTags`, tagged once in background at import); commander events quick-pick the deck's commander
 - **Edit after the fact**: metadata and placements
 - **CSV export** of the group's full history (one row per seat)
 

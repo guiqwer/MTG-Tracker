@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
@@ -74,6 +74,34 @@ interface CardPick {
   scryfallId: string
   name: string
   artCropUrl: string | null
+}
+
+// Event types that map to a Scryfall Tagger oracle tag — for these the card
+// field offers a select of matching cards from the actor's deck.
+const EVENT_TAG: Record<string, string> = {
+  REMOVAL: 'removal',
+  COUNTER: 'counterspell',
+  TUTOR: 'tutor',
+  BOARDWIPE: 'boardwipe',
+  RAMP: 'ramp',
+  DRAW: 'draw',
+}
+
+interface TaggedCard {
+  scryfallId: string
+  name: string
+  manaCost: string | null
+  typeLine: string | null
+  artCropUrl: string | null
+  oracleTags: string[]
+}
+
+// Tags are computed once server-side and cached forever client-side, so this
+// costs one request per deck per session at most.
+async function fetchDeckTags(deckId: string): Promise<TaggedCard[]> {
+  const { data, error } = await api.decks({ id: deckId })['card-tags'].get()
+  if (error) throw error
+  return (data && 'error' in data ? [] : data) as unknown as TaggedCard[]
 }
 
 export function MatchDetailPage() {
@@ -175,6 +203,45 @@ export function MatchDetailPage() {
   const m = match.data
   const participants = m?.participants ?? []
   const events = m?.events ?? []
+
+  // Deck-aware card suggestions: when the event type has an oracle tag and an
+  // actor is picked, offer that player's matching cards instead of raw search.
+  const actor = participants.find((p) => p.id === actorId)
+  const actorDeckId = actor?.deck?.id
+  const eventTag = EVENT_TAG[type]
+  const deckTags = useQuery({
+    queryKey: ['deck-card-tags', actorDeckId],
+    enabled: !!actorDeckId && !!eventTag,
+    staleTime: Infinity,
+    queryFn: () => fetchDeckTags(actorDeckId!),
+  })
+  const suggestions = useMemo(
+    () =>
+      eventTag && deckTags.data
+        ? deckTags.data.filter((c) => c.oracleTags.includes(eventTag))
+        : [],
+    [eventTag, deckTags.data],
+  )
+  const commanderPick =
+    (type === 'COMMANDER_CAST' || type === 'COMMANDER_DIED') && actor?.deck?.commander
+      ? actor.deck.commander
+      : null
+
+  // While a table is live, warm every seat's deck tags so the select is
+  // instant on first use (server dedupes + caches, so this is cheap).
+  useEffect(() => {
+    if (!m || m.status !== 'IN_PROGRESS') return
+    for (const p of m.participants) {
+      const deckId = p.deck?.id
+      if (deckId) {
+        qc.prefetchQuery({
+          queryKey: ['deck-card-tags', deckId],
+          queryFn: () => fetchDeckTags(deckId),
+          staleTime: Infinity,
+        })
+      }
+    }
+  }, [m, qc])
 
   const openEdit = (finish = false) => {
     if (!m) return
@@ -550,12 +617,70 @@ export function MatchDetailPage() {
                       </Button>
                     </div>
                   ) : (
+                    <div className="space-y-2">
+                      {commanderPick && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="w-full justify-start gap-2"
+                          onClick={() =>
+                            setCard({
+                              scryfallId: commanderPick.scryfallId,
+                              name: commanderPick.name,
+                              artCropUrl: commanderPick.artCropUrl,
+                            })
+                          }
+                        >
+                          <Crown className="h-3.5 w-3.5 text-amber-400" />
+                          <span className="truncate">{commanderPick.name}</span>
+                        </Button>
+                      )}
+                      {eventTag && actorDeckId && suggestions.length > 0 && (
+                        <select
+                          className={cn(selectCls, 'w-full')}
+                          value=""
+                          onChange={(e) => {
+                            const c = suggestions.find((s) => s.scryfallId === e.target.value)
+                            if (c)
+                              setCard({
+                                scryfallId: c.scryfallId,
+                                name: c.name,
+                                artCropUrl: c.artCropUrl,
+                              })
+                          }}
+                        >
+                          <option value="" disabled>
+                            {EVENT_META[type].label} in {actor?.player.name}'s deck (
+                            {suggestions.length})…
+                          </option>
+                          {suggestions.map((c) => (
+                            <option key={c.scryfallId} value={c.scryfallId}>
+                              {c.name}
+                            </option>
+                          ))}
+                        </select>
+                      )}
+                      {eventTag && actorDeckId && deckTags.isLoading && (
+                        <p className="text-xs text-muted-foreground">
+                          Scanning {actor?.player.name}'s deck for{' '}
+                          {EVENT_META[type].label.toLowerCase()} cards…
+                        </p>
+                      )}
+                      {eventTag && !actorId && (
+                        <p className="text-xs text-muted-foreground">
+                          Pick an actor to suggest cards from their deck.
+                        </p>
+                      )}
                     <div className="relative">
                       <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                       <Input
                         value={cardQuery}
                         onChange={(e) => setCardQuery(e.target.value)}
-                        placeholder="Search card…"
+                        placeholder={
+                          suggestions.length > 0 || commanderPick
+                            ? 'Or search any card…'
+                            : 'Search card…'
+                        }
                         className="pl-8"
                       />
                       {cardSearch.data && cardSearch.data.length > 0 && (
@@ -582,6 +707,7 @@ export function MatchDetailPage() {
                           ))}
                         </div>
                       )}
+                    </div>
                     </div>
                   )}
                 </div>

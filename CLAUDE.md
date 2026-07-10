@@ -48,6 +48,7 @@ docker compose exec -T db psql -U mtg -d mtgtracker
 - **Accent art:** new images in `apps/web/public/mtg/` must be recompressed: `magick in.webp -resize '1600x1600>' -quality 78 -define webp:method=6 out.webp`.
 - **Concurrency:** check-then-act must be backstopped by unique constraints + `isUniqueViolation` (P2002) → clean 409, never a raw 500.
 - **Moxfield fetches need a browser User-Agent** (`lib/decklist.ts`); it's an unofficial API — text import is the fallback path.
+- **Oracle tags** (`lib/card-tags.ts`): cards get Scryfall Tagger otags (removal/ramp/…) via batched `otag:` searches — once per card globally (`taggedAt`), fired in background on deck import/sync, deduped per deck in-process. On Scryfall failure persist NOTHING (so retry stays clean); never mark a card tagged with guessed/empty tags.
 
 ## Conventions
 

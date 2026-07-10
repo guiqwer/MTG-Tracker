@@ -11,6 +11,7 @@ import {
 } from '../lib/decklist'
 import { requireUserId } from '../security/tokens'
 import { isMember, sharedGroupIds, FORBIDDEN_GROUP } from '../lib/membership'
+import { ensureDeckTagged } from '../lib/card-tags'
 
 // Never include the raw user relation (it carries passwordHash) — select only
 // what the UI shows.
@@ -243,6 +244,9 @@ export const decks = new Elysia({ prefix: '/decks' })
         },
         include: deckInclude,
       })
+      // Warm the Scryfall oracle tags in the background so event suggestions
+      // are instant by the time this deck sits at a table.
+      void ensureDeckTagged(deck.id)
       return { deck: (await withCardCounts([deck]))[0], notFound }
     },
     {
@@ -316,7 +320,40 @@ export const decks = new Elysia({ prefix: '/decks' })
       where: { id: deck.id },
       include: deckInclude,
     })
+    void ensureDeckTagged(deck.id) // new cards may need oracle tags
     return { deck: (await withCardCounts([fresh!]))[0], notFound }
+  })
+  // Deck cards with their Scryfall oracle tags — feeds the "pick from deck"
+  // select on the match event form. Tagging is lazy (first call may hit
+  // Scryfall for still-untagged cards); afterwards this is a pure DB read.
+  .get('/:id/card-tags', async ({ headers, params, set }) => {
+    const userId = await requireUserId(headers.authorization)
+    const deck = await prisma.deck.findUnique({
+      where: { id: params.id },
+      include: { owner: true },
+    })
+    if (!deck || !(await canAccessDeck(userId, deck))) {
+      set.status = 404
+      return NOT_FOUND
+    }
+    await ensureDeckTagged(deck.id)
+    const rows = await prisma.deckCard.findMany({
+      where: { deckId: deck.id },
+      select: {
+        card: {
+          select: {
+            scryfallId: true,
+            name: true,
+            manaCost: true,
+            typeLine: true,
+            artCropUrl: true,
+            oracleTags: true,
+          },
+        },
+      },
+      orderBy: { card: { name: 'asc' } },
+    })
+    return rows.map((r) => r.card)
   })
   // Deck detail with its full card list (the deck-view page groups by type).
   .get('/:id', async ({ headers, params, set }) => {

@@ -75,6 +75,46 @@ export async function fetchCardByName(name: string): Promise<ScryfallCard | null
   return normalize(await res.json())
 }
 
+// Which of `names` carry a given Scryfall Tagger oracle tag (otag:removal…).
+// Names are OR-ed into batched search queries (~40 per request, staying under
+// Scryfall's query length cap), so a 100-card deck costs ~3 requests per tag.
+// Returns matched names lowercased. 404 = no matches; other failures throw so
+// callers don't persist a false "no tags" result.
+export async function filterByOracleTag(
+  tag: string,
+  names: string[],
+): Promise<Set<string>> {
+  const matched = new Set<string>()
+  const batches: string[][] = []
+  let batch: string[] = []
+  let len = 0
+  for (const name of names) {
+    const term = `!"${name.replaceAll('"', '')}"`
+    if (batch.length && len + term.length + 4 > 800) {
+      batches.push(batch)
+      batch = []
+      len = 0
+    }
+    batch.push(term)
+    len += term.length + 4
+  }
+  if (batch.length) batches.push(batch)
+
+  for (const terms of batches) {
+    const q = `otag:${tag} (${terms.join(' or ')})`
+    const res = await fetch(
+      `${BASE}/cards/search?q=${encodeURIComponent(q)}&unique=cards`,
+      { headers: HEADERS },
+    )
+    if (res.status === 404) continue // none of this batch has the tag
+    if (!res.ok) throw new Error(`Scryfall otag search failed (${res.status})`)
+    const data = (await res.json()) as any
+    for (const c of data.data ?? []) matched.add((c.name as string).toLowerCase())
+    await new Promise((r) => setTimeout(r, 100)) // polite rate limit
+  }
+  return matched
+}
+
 export type CardIdentifier = { id: string } | { name: string }
 
 // Bulk lookup via /cards/collection — up to 75 identifiers per request, so a
