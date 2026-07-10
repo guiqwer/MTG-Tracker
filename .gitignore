@@ -35,3 +35,6 @@ docker-compose.override.yml
 /api/
 /oauth-developer-skills/
 .claude/skills/
+
+# Markdown docs are local-only (owner rule: no .md on GitHub)
+*.md
