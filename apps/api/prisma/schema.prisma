@@ -183,6 +183,9 @@ model Match {
   // Which playgroup this match belongs to (see the note on Player.groupId).
   groupId      String?
   group        Group?        @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  // IN_PROGRESS matches are "open at the table": events are logged as the game
+  // unfolds and the podium comes at the end. Stats only count FINISHED games.
+  status       MatchStatus   @default(FINISHED)
   playedAt     DateTime      @default(now())
   durationMins Int?
   turns        Int?
@@ -290,4 +293,9 @@ enum EndReason {
 enum GroupRole {
   OWNER
   MEMBER
+}
+
+enum MatchStatus {
+  IN_PROGRESS
+  FINISHED
 }

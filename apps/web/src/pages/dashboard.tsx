@@ -398,7 +398,7 @@ export function DashboardPage() {
                 <p className="py-6 text-center text-sm text-muted-foreground">No data yet</p>
               )}
               <p className="mt-2 text-[11px] text-muted-foreground">
-                Across the table's decks, basics excluded.
+                From decks that played here, basics excluded.
               </p>
             </CardContent>
           </Card>

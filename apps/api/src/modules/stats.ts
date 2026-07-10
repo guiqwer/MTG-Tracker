@@ -30,10 +30,11 @@ export const stats = new Elysia({ prefix: '/stats' })
             ],
           },
         }),
-        prisma.match.count({ where: { groupId } }),
-        prisma.matchEvent.count({ where: { match: { groupId } } }),
+        // Open (in-progress) matches don't count until they're finished.
+        prisma.match.count({ where: { groupId, status: 'FINISHED' } }),
+        prisma.matchEvent.count({ where: { match: { groupId, status: 'FINISHED' } } }),
         prisma.match.aggregate({
-          where: { groupId },
+          where: { groupId, status: 'FINISHED' },
           _avg: { durationMins: true, turns: true },
         }),
       ])
@@ -59,7 +60,7 @@ export const stats = new Elysia({ prefix: '/stats' })
       const players = await prisma.player.findMany({
         where: { groupId: query.groupId },
         include: {
-          participations: true,
+          participations: { where: { match: { status: 'FINISHED' } } },
           user: { select: { id: true, username: true, avatarColor: true } },
         },
       })
@@ -101,7 +102,10 @@ export const stats = new Elysia({ prefix: '/stats' })
           owner: true,
           user: { select: { username: true } },
           commander: true,
-          participations: { include: { match: { select: { groupId: true } } } },
+          participations: {
+            where: { match: { status: 'FINISHED' } },
+            include: { match: { select: { groupId: true } } },
+          },
         },
       })
       return decks
@@ -138,7 +142,7 @@ export const stats = new Elysia({ prefix: '/stats' })
 
       const [events, matches] = await Promise.all([
         prisma.matchEvent.findMany({
-          where: { match: { groupId } },
+          where: { match: { groupId, status: 'FINISHED' } },
           include: {
             actor: {
               include: {
@@ -153,7 +157,7 @@ export const stats = new Elysia({ prefix: '/stats' })
           },
         }),
         prisma.match.findMany({
-          where: { groupId },
+          where: { groupId, status: 'FINISHED' },
           orderBy: { playedAt: 'desc' },
           include: {
             participants: {
@@ -314,15 +318,13 @@ export const stats = new Elysia({ prefix: '/stats' })
         })
       }
 
-      // ── Most played cards across the table's decks (basics excluded) ─────
+      // ── Most played cards: only decks that actually hit this table (have a
+      // finished match here) count — no matches, no cards. Basics excluded.
       const cardCounts = await prisma.deckCard.groupBy({
         by: ['cardId'],
         where: {
           deck: {
-            OR: [
-              { owner: { groupId } },
-              { user: { memberships: { some: { groupId } } } },
-            ],
+            participations: { some: { match: { groupId, status: 'FINISHED' } } },
           },
           card: { NOT: { typeLine: { startsWith: 'Basic Land' } } },
         },

@@ -75,7 +75,10 @@ export const profiles = new Elysia({ prefix: '/profiles' })
 
     // Everything they played in scope.
     const parts = await prisma.matchParticipant.findMany({
-      where: { playerId: { in: playerIds }, match: { groupId: { in: scope } } },
+      where: {
+        playerId: { in: playerIds },
+        match: { groupId: { in: scope }, status: 'FINISHED' },
+      },
       include: {
         match: { select: { id: true, playedAt: true, groupId: true, winCondition: true } },
         deck: { include: { commander: true } },
@@ -122,7 +125,7 @@ export const profiles = new Elysia({ prefix: '/profiles' })
     const events = playerIds.length
       ? await prisma.matchEvent.findMany({
           where: {
-            match: { groupId: { in: scope } },
+            match: { groupId: { in: scope }, status: 'FINISHED' },
             OR: [
               { actor: { playerId: { in: playerIds } } },
               { target: { playerId: { in: playerIds } } },

@@ -14,6 +14,7 @@ import {
   Infinity as InfinityIcon,
   Plus,
   Search,
+  Flag,
   Pencil,
   Skull,
   Sparkles,
@@ -161,8 +162,10 @@ export function MatchDetailPage() {
     },
   })
 
-  // Post-hoc editing: metadata + podium placements.
+  // Post-hoc editing: metadata + podium placements. In finish mode the same
+  // panel closes an in-progress match (sets status FINISHED).
   const [editOpen, setEditOpen] = useState(false)
+  const [finishing, setFinishing] = useState(false)
   const [eDuration, setEDuration] = useState('')
   const [eTurns, setETurns] = useState('')
   const [eWincon, setEWincon] = useState('')
@@ -173,9 +176,11 @@ export function MatchDetailPage() {
   const participants = m?.participants ?? []
   const events = m?.events ?? []
 
-  const openEdit = () => {
+  const openEdit = (finish = false) => {
     if (!m) return
-    setEDuration(m.durationMins ? String(m.durationMins) : '')
+    setFinishing(finish)
+    const elapsed = Math.max(1, Math.round((Date.now() - new Date(m.playedAt).getTime()) / 60_000))
+    setEDuration(m.durationMins ? String(m.durationMins) : finish ? String(elapsed) : '')
     setETurns(m.turns ? String(m.turns) : '')
     setEWincon(m.winCondition ?? '')
     setEEndReason(m.endReason ?? '')
@@ -193,6 +198,7 @@ export function MatchDetailPage() {
         .filter(([, v]) => v.trim())
         .map(([participantId, v]) => ({ participantId, placement: Number(v) }))
       const { data, error } = await api.matches({ id: matchId }).patch({
+        status: finishing ? 'FINISHED' : undefined,
         durationMins: eDuration ? Number(eDuration) : undefined,
         turns: eTurns ? Number(eTurns) : undefined,
         winCondition: eWincon || undefined,
@@ -203,13 +209,17 @@ export function MatchDetailPage() {
       return data && 'error' in data ? null : data
     },
     onSuccess: () => {
-      toast.success('Match updated')
+      toast.success(finishing ? 'Match finished — podium locked in' : 'Match updated')
       setEditOpen(false)
+      setFinishing(false)
       invalidate()
       qc.invalidateQueries({ queryKey: ['stats'] })
     },
     onError: () => toast.error('Could not update the match'),
   })
+
+  const isLive = m?.status === 'IN_PROGRESS'
+  const elapsed = m ? Math.max(0, Math.round((Date.now() - new Date(m.playedAt).getTime()) / 60_000)) : 0
 
   return (
     <div className="space-y-6">
@@ -235,19 +245,35 @@ export function MatchDetailPage() {
               month: 'long',
               year: 'numeric',
             })}
-            subtitle="Timeline and podium of the match."
+            subtitle={isLive ? "Table is open — log the plays as they happen." : "Timeline and podium of the match."}
             icon={Swords}
           >
-            {m.winCondition && (
-              <Badge variant="gold">{WINCON_LABEL[m.winCondition] ?? m.winCondition}</Badge>
+            {isLive ? (
+              <Badge variant="success" className="gap-1.5">
+                <span className="relative flex h-2 w-2">
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-success opacity-60" />
+                  <span className="relative inline-flex h-2 w-2 rounded-full bg-success" />
+                </span>
+                Live · {elapsed} min
+              </Badge>
+            ) : (
+              m.winCondition && (
+                <Badge variant="gold">{WINCON_LABEL[m.winCondition] ?? m.winCondition}</Badge>
+              )
             )}
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => (editOpen ? setEditOpen(false) : openEdit())}
-            >
-              <Pencil /> {editOpen ? 'Close' : 'Edit'}
-            </Button>
+            {isLive ? (
+              <Button size="sm" onClick={() => (editOpen ? setEditOpen(false) : openEdit(true))}>
+                <Flag /> {editOpen ? 'Close' : 'Finish match'}
+              </Button>
+            ) : (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => (editOpen ? setEditOpen(false) : openEdit())}
+              >
+                <Pencil /> {editOpen ? 'Close' : 'Edit'}
+              </Button>
+            )}
             <Button variant="outline" size="sm" onClick={() => delMatch.mutate()}>
               <Trash2 /> Delete
             </Button>
@@ -326,8 +352,18 @@ export function MatchDetailPage() {
                   ))}
                 </div>
                 <Button onClick={() => saveEdit.mutate()} disabled={saveEdit.isPending}>
-                  {saveEdit.isPending ? 'Saving…' : 'Save changes'}
+                  {saveEdit.isPending
+                    ? 'Saving…'
+                    : finishing
+                      ? 'Finish match'
+                      : 'Save changes'}
                 </Button>
+                {finishing && (
+                  <p className="text-xs text-muted-foreground">
+                    Set each seat's finish position — 1 marks the winner. Duration was prefilled
+                    from the table clock.
+                  </p>
+                )}
               </CardContent>
             </Card>
           )}

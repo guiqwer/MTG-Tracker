@@ -85,6 +85,8 @@ export const matches = new Elysia({ prefix: '/matches' })
       return prisma.match.create({
         data: {
           groupId: body.groupId,
+          // Started at the table: no podium yet, events flow in as the game runs.
+          status: body.inProgress ? 'IN_PROGRESS' : 'FINISHED',
           playedAt: body.playedAt ? new Date(body.playedAt) : undefined,
           durationMins: body.durationMins,
           turns: body.turns,
@@ -108,6 +110,7 @@ export const matches = new Elysia({ prefix: '/matches' })
     {
       body: t.Object({
         groupId: t.String(),
+        inProgress: t.Optional(t.Boolean()),
         playedAt: t.Optional(t.String()),
         durationMins: t.Optional(t.Number()),
         turns: t.Optional(t.Number()),
@@ -156,6 +159,7 @@ export const matches = new Elysia({ prefix: '/matches' })
         prisma.match.update({
           where: { id: params.id },
           data: {
+            status: (body.status || undefined) as never,
             playedAt: body.playedAt ? new Date(body.playedAt) : undefined,
             durationMins: body.durationMins,
             turns: body.turns,
@@ -180,6 +184,7 @@ export const matches = new Elysia({ prefix: '/matches' })
     },
     {
       body: t.Object({
+        status: t.Optional(t.Union([t.Literal('IN_PROGRESS'), t.Literal('FINISHED')])),
         playedAt: t.Optional(t.String()),
         durationMins: t.Optional(t.Number()),
         turns: t.Optional(t.Number()),
