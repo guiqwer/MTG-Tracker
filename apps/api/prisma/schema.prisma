@@ -182,6 +182,7 @@ model Deck {
   bracket       Int? // official WotC bracket 1-5
   colorIdentity String[] @default([]) // derived from commander (+ partner)
   moxfieldUrl   String?
+  retiredAt     DateTime? // retired decks keep their history but leave pickers/lists
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 

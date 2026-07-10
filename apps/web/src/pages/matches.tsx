@@ -241,8 +241,9 @@ export function MatchesPage() {
     return (
       decks.data?.filter(
         (d) =>
-          d.ownerId === ownerId ||
-          (!d.ownerId && player?.user && d.user?.id === player.user.id),
+          !d.retiredAt &&
+          (d.ownerId === ownerId ||
+            (!d.ownerId && player?.user && d.user?.id === player.user.id)),
       ) ?? []
     )
   }
@@ -470,7 +471,8 @@ export function MatchesPage() {
                       ))}
                       {(() => {
                         const offered = new Set(decksByOwner(r.playerId).map((d) => d.id))
-                        const extras = myDecks.data?.filter((d) => !offered.has(d.id)) ?? []
+                        const extras =
+                          myDecks.data?.filter((d) => !offered.has(d.id) && !d.retiredAt) ?? []
                         return extras.length > 0 ? (
                           <optgroup label="My decks (imported)">
                             {extras.map((d) => (

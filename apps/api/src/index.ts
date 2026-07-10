@@ -10,6 +10,7 @@ import { groups } from './modules/groups'
 import { profiles } from './modules/profiles'
 import { ideas } from './modules/ideas'
 import { checkAuth } from './security/guard'
+import { backfillCardTags } from './lib/card-tags'
 
 export const app = new Elysia()
   .use(cors())
@@ -39,6 +40,10 @@ export const app = new Elysia()
 console.log(
   `🚀 Magic Match Tracker API running on http://localhost:${app.server?.port}`,
 )
+
+// Warm Scryfall oracle tags for cards imported before the tagging feature —
+// runs in the background so boot stays instant.
+void backfillCardTags().catch((e) => console.error('tag backfill failed:', e))
 
 // Exported for Eden Treaty end-to-end types on the web app.
 export type App = typeof app

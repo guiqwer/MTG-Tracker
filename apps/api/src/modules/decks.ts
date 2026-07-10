@@ -51,6 +51,21 @@ async function canAccessDeck(
   return false
 }
 
+// Management (delete/retire) is stricter than visibility: only the owning
+// account; guest decks (no account behind the player) are manageable by any
+// member of their group.
+async function canManageDeck(
+  userId: string,
+  deck: {
+    userId: string | null
+    owner: { userId: string | null; groupId: string | null } | null
+  },
+): Promise<boolean> {
+  const ownerAccount = deck.userId ?? deck.owner?.userId
+  if (ownerAccount) return ownerAccount === userId
+  return !!deck.owner?.groupId && isMember(userId, deck.owner.groupId)
+}
+
 // Resolve parsed entries to cards in our DB via one bulk Scryfall lookup.
 async function resolveEntries(entries: ParsedEntry[]) {
   const identifiers: CardIdentifier[] = []
@@ -425,6 +440,31 @@ export const decks = new Elysia({ prefix: '/decks' })
       }),
     },
   )
+  // Retire (or bring back) a deck: it keeps all match history and stats but
+  // leaves the active lists and seat pickers.
+  .post(
+    '/:id/retire',
+    async ({ headers, params, body, set }) => {
+      const userId = await requireUserId(headers.authorization)
+      const deck = await prisma.deck.findUnique({
+        where: { id: params.id },
+        include: { owner: true },
+      })
+      if (!deck || !(await canAccessDeck(userId, deck))) {
+        set.status = 404
+        return NOT_FOUND
+      }
+      if (!(await canManageDeck(userId, deck))) {
+        set.status = 403
+        return { error: 'forbidden', error_description: 'Only the deck owner can retire it' }
+      }
+      return prisma.deck.update({
+        where: { id: deck.id },
+        data: { retiredAt: body.retired ? new Date() : null },
+      })
+    },
+    { body: t.Object({ retired: t.Boolean() }) },
+  )
   .delete('/:id', async ({ headers, params, set }) => {
     const userId = await requireUserId(headers.authorization)
     const deck = await prisma.deck.findUnique({
@@ -435,13 +475,7 @@ export const decks = new Elysia({ prefix: '/decks' })
       set.status = 404
       return NOT_FOUND
     }
-    // Visibility ≠ management: only the owning account may delete. Guest decks
-    // have no account behind them, so any member of their group can manage.
-    const ownerAccount = deck.userId ?? deck.owner?.userId
-    const canDelete = ownerAccount
-      ? ownerAccount === userId
-      : !!deck.owner?.groupId && (await isMember(userId, deck.owner.groupId))
-    if (!canDelete) {
+    if (!(await canManageDeck(userId, deck))) {
       set.status = 403
       return { error: 'forbidden', error_description: 'Only the deck owner can delete it' }
     }

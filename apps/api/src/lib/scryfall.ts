@@ -102,17 +102,31 @@ export async function filterByOracleTag(
 
   for (const terms of batches) {
     const q = `otag:${tag} (${terms.join(' or ')})`
-    const res = await fetch(
+    const res = await fetchWithBackoff(
       `${BASE}/cards/search?q=${encodeURIComponent(q)}&unique=cards`,
-      { headers: HEADERS },
     )
     if (res.status === 404) continue // none of this batch has the tag
     if (!res.ok) throw new Error(`Scryfall otag search failed (${res.status})`)
     const data = (await res.json()) as any
     for (const c of data.data ?? []) matched.add((c.name as string).toLowerCase())
-    await new Promise((r) => setTimeout(r, 100)) // polite rate limit
+    await new Promise((r) => setTimeout(r, 150)) // polite rate limit
   }
   return matched
+}
+
+// Scryfall throttles bursts with 429s — honor Retry-After (or back off
+// progressively) instead of failing the whole tagging run.
+async function fetchWithBackoff(url: string, tries = 3): Promise<Response> {
+  for (let attempt = 0; ; attempt++) {
+    const res = await fetch(url, { headers: HEADERS })
+    if ((res.status === 429 || res.status >= 500) && attempt < tries) {
+      const retryAfter = Number(res.headers.get('retry-after'))
+      const wait = retryAfter > 0 ? retryAfter * 1000 : 1500 * (attempt + 1)
+      await new Promise((r) => setTimeout(r, wait))
+      continue
+    }
+    return res
+  }
 }
 
 export type CardIdentifier = { id: string } | { name: string }

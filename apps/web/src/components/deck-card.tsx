@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom'
 import { Trash2, User } from 'lucide-react'
+import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Avatar } from '@/components/ui/avatar'
@@ -18,6 +19,7 @@ export interface DeckCardData {
   user?: { username: string } | null
   _count: { participations: number }
   cardCount?: number // total cards (sum of quantities), set by the list endpoints
+  retiredAt?: string | Date | null // retired decks keep history but leave pickers
 }
 
 export function DeckCard({
@@ -31,7 +33,12 @@ export function DeckCard({
   const games = deck._count.participations
   const cardCount = deck.cardCount ?? 0
   return (
-    <div className="group relative overflow-hidden rounded-xl border bg-card transition-all duration-200 hover:border-primary/40 hover:shadow-lg hover:shadow-primary/5">
+    <div
+      className={cn(
+        'group relative overflow-hidden rounded-xl border bg-card transition-all duration-200 hover:border-primary/40 hover:shadow-lg hover:shadow-primary/5',
+        deck.retiredAt && 'opacity-70 saturate-50',
+      )}
+    >
       <Link to={`/app/decks/${deck.id}`} className="block">
         <div className="relative h-32 overflow-hidden">
           {art ? (
@@ -48,6 +55,11 @@ export function DeckCard({
           )}
           <div className="absolute inset-0 bg-gradient-to-t from-card via-card/40 to-transparent" />
           <div className="absolute left-2.5 top-2.5 flex gap-1.5">
+            {deck.retiredAt && (
+              <Badge className="border-transparent bg-black/55 text-white backdrop-blur">
+                Retired
+              </Badge>
+            )}
             {deck.powerLevel != null && (
               <Badge className="border-transparent bg-black/55 text-white backdrop-blur">
                 PL {deck.powerLevel}

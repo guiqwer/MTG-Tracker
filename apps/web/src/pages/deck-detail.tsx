@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { toast } from 'sonner'
 import {
+  Archive,
   ChevronLeft,
   Copy,
   Download,
@@ -69,6 +70,7 @@ interface DeckDetail {
   powerLevel: number | null
   bracket: number | null
   moxfieldUrl: string | null
+  retiredAt: string | null
   commanderId: string | null
   partnerId: string | null
   commander: { name: string; artCropUrl: string | null } | null
@@ -201,6 +203,25 @@ export function DeckDetailPage() {
       toast.error(
         (err as { value?: { error_description?: string } })?.value?.error_description ??
           'Could not remove the deck',
+      ),
+  })
+
+  const retire = useMutation({
+    mutationFn: async (retired: boolean) => {
+      const { data, error } = await api.decks({ id }).retire.post({ retired })
+      if (error) throw error
+      return data && 'error' in data ? null : data
+    },
+    onSuccess: (_, retired) => {
+      toast.success(retired ? 'Deck retired — history stays' : 'Deck is back in the rotation')
+      qc.invalidateQueries({ queryKey: ['deck', id] })
+      qc.invalidateQueries({ queryKey: ['decks'] })
+      qc.invalidateQueries({ queryKey: ['my-decks'] })
+    },
+    onError: (err) =>
+      toast.error(
+        (err as { value?: { error_description?: string } })?.value?.error_description ??
+          'Could not update the deck',
       ),
   })
 
@@ -377,6 +398,21 @@ export function DeckDetailPage() {
                     <Button
                       variant="outline"
                       size="sm"
+                      onClick={() => retire.mutate(!d.retiredAt)}
+                      disabled={retire.isPending}
+                      title={
+                        d.retiredAt
+                          ? 'Put the deck back in the active rotation'
+                          : 'Keep the history but leave lists and seat pickers'
+                      }
+                    >
+                      <Archive /> {d.retiredAt ? 'Bring back' : 'Retire'}
+                    </Button>
+                  )}
+                  {canDelete && (
+                    <Button
+                      variant="outline"
+                      size="sm"
                       className="text-destructive hover:bg-destructive/10"
                       onClick={() => {
                         if (confirm(`Delete "${d.name}"?`)) remove.mutate()
@@ -389,6 +425,7 @@ export function DeckDetailPage() {
                 </div>
               </div>
               <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                {d.retiredAt && <Badge variant="warning">Retired</Badge>}
                 <Badge variant="secondary">
                   <Layers className="h-3 w-3" /> {total} cards
                 </Badge>

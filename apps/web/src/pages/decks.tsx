@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { Download, Layers, Link2, Plus, Search, User, X } from 'lucide-react'
+import { Archive, Download, Layers, Link2, Plus, Search, User, X } from 'lucide-react'
 import { api } from '@/lib/eden'
 import { useActiveGroup } from '@/lib/group'
 import { useMe } from '@/lib/me'
@@ -274,16 +274,18 @@ export function DecksPage() {
       )}
 
       {/* Personal decks — tied to your account, usable in any playgroup */}
-      {(myDecks.data?.length ?? 0) > 0 && (
+      {(myDecks.data?.filter((d) => !d.retiredAt).length ?? 0) > 0 && (
         <section className="space-y-3">
           <h2 className="flex items-center gap-2 text-sm font-semibold text-muted-foreground">
             <User className="h-4 w-4" /> My decks
             <span className="font-normal">— yours in every playgroup</span>
           </h2>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {myDecks.data!.map((d) => (
-              <DeckCard key={d.id} deck={d} onDelete={(id) => remove.mutate(id)} />
-            ))}
+            {myDecks.data!
+              .filter((d) => !d.retiredAt)
+              .map((d) => (
+                <DeckCard key={d.id} deck={d} onDelete={(id) => remove.mutate(id)} />
+              ))}
           </div>
           <h2 className="pt-2 text-sm font-semibold text-muted-foreground">
             {activeGroup!.name} decks
@@ -427,7 +429,7 @@ export function DecksPage() {
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {decks.data
-            .filter((d) => d.owner || d.user?.id !== me.data?.id)
+            .filter((d) => (d.owner || d.user?.id !== me.data?.id) && !d.retiredAt)
             .map((d) => {
               // Delete only what's yours — guest decks (no account behind the
               // player) are manageable by anyone in the group.
@@ -444,6 +446,30 @@ export function DecksPage() {
             })}
         </div>
       )}
+
+      {/* Retired decks — history stays, they just left the active rotation */}
+      {(() => {
+        const seen = new Set<string>()
+        const retired = [...(decks.data ?? []), ...(myDecks.data ?? [])].filter((d) => {
+          if (!d.retiredAt || seen.has(d.id)) return false
+          seen.add(d.id)
+          return true
+        })
+        if (!retired.length) return null
+        return (
+          <section className="space-y-3">
+            <h2 className="flex items-center gap-2 text-sm font-semibold text-muted-foreground">
+              <Archive className="h-4 w-4" /> Retired
+              <span className="font-normal">— out of the rotation, history kept</span>
+            </h2>
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {retired.map((d) => (
+                <DeckCard key={d.id} deck={d} />
+              ))}
+            </div>
+          </section>
+        )
+      })()}
     </div>
   )
 }

@@ -3,6 +3,7 @@ import { prisma } from '../lib/prisma'
 import { importCard } from '../lib/cards'
 import { requireUserId } from '../security/tokens'
 import { isMember, FORBIDDEN_GROUP } from '../lib/membership'
+import { ensureDeckTagged } from '../lib/card-tags'
 
 const participantInclude = {
   player: true,
@@ -81,6 +82,11 @@ export const matches = new Elysia({ prefix: '/matches' })
           error: 'invalid_participants',
           error_description: 'All participants must be players of this group',
         }
+      }
+      // Warm event-card suggestions for every seat's deck while the game
+      // starts — by the first logged play the tags are already in the DB.
+      for (const deckId of new Set(body.participants.map((p) => p.deckId))) {
+        void ensureDeckTagged(deckId)
       }
       return prisma.match.create({
         data: {
