@@ -1,5 +1,5 @@
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom'
-import { LayoutDashboard, Users, Layers, Swords } from 'lucide-react'
+import { LayoutDashboard, Users, Layers, Swords, Lightbulb } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { GroupProvider } from '@/lib/group'
 import { LogoMark } from '@/components/logo'
@@ -12,6 +12,7 @@ const nav = [
   { to: '/app/players', label: 'Players', icon: Users, end: false },
   { to: '/app/decks', label: 'Decks', icon: Layers, end: false },
   { to: '/app/matches', label: 'Matches', icon: Swords, end: false },
+  { to: '/app/ideas', label: 'Ideas', icon: Lightbulb, end: false },
 ]
 
 export function Layout() {

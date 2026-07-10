@@ -8,6 +8,7 @@ import { stats } from './modules/stats'
 import { auth } from './modules/auth'
 import { groups } from './modules/groups'
 import { profiles } from './modules/profiles'
+import { ideas } from './modules/ideas'
 import { checkAuth } from './security/guard'
 
 export const app = new Elysia()
@@ -32,6 +33,7 @@ export const app = new Elysia()
   .use(decks)
   .use(matches)
   .use(stats)
+  .use(ideas)
   .listen({ port: Number(process.env.PORT ?? 3000), hostname: '0.0.0.0' })
 
 console.log(

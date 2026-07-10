@@ -35,8 +35,39 @@ model User {
   memberships GroupMembership[]
   decks       Deck[]
   players     Player[]
+  ideas       Idea[]
+  ideaVotes   IdeaVote[]
 
   @@map("users")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Idea board — app-wide suggestion box: any user can post an idea, everyone
+// can upvote; the owner reads it to steer the roadmap.
+// ─────────────────────────────────────────────────────────────────────────────
+
+model Idea {
+  id        String     @id @default(cuid())
+  title     String
+  body      String?
+  userId    String
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  votes     IdeaVote[]
+  createdAt DateTime   @default(now())
+
+  @@map("ideas")
+}
+
+model IdeaVote {
+  id        String   @id @default(cuid())
+  ideaId    String
+  idea      Idea     @relation(fields: [ideaId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([ideaId, userId])
+  @@map("idea_votes")
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
