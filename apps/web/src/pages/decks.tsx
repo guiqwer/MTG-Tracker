@@ -159,7 +159,11 @@ export function DecksPage() {
       qc.invalidateQueries({ queryKey: ['decks'] })
       qc.invalidateQueries({ queryKey: ['my-decks'] })
     },
-    onError: () => toast.error('Could not remove deck'),
+    onError: (err) =>
+      toast.error(
+        (err as { value?: { error_description?: string } })?.value?.error_description ??
+          'Could not remove deck',
+      ),
   })
 
   const canSubmit = name.trim() && ownerId
@@ -424,9 +428,20 @@ export function DecksPage() {
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {decks.data
             .filter((d) => d.owner || d.user?.id !== me.data?.id)
-            .map((d) => (
-              <DeckCard key={d.id} deck={d} onDelete={(id) => remove.mutate(id)} />
-            ))}
+            .map((d) => {
+              // Delete only what's yours — guest decks (no account behind the
+              // player) are manageable by anyone in the group.
+              const mine = d.user
+                ? d.user.id === me.data?.id
+                : !d.owner?.userId || d.owner.userId === me.data?.id
+              return (
+                <DeckCard
+                  key={d.id}
+                  deck={d}
+                  onDelete={mine ? (id) => remove.mutate(id) : undefined}
+                />
+              )
+            })}
         </div>
       )}
     </div>

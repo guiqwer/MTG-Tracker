@@ -72,7 +72,7 @@ interface DeckDetail {
   commanderId: string | null
   partnerId: string | null
   commander: { name: string; artCropUrl: string | null } | null
-  owner: { name: string; avatarColor: string | null } | null
+  owner: { name: string; avatarColor: string | null; userId: string | null } | null
   user: { id: string; username: string } | null
   _count: { participations: number; cards: number }
   cards: CardRow[]
@@ -197,7 +197,11 @@ export function DeckDetailPage() {
       qc.invalidateQueries({ queryKey: ['my-decks'] })
       navigate('/app/decks')
     },
-    onError: () => toast.error('Could not remove the deck'),
+    onError: (err) =>
+      toast.error(
+        (err as { value?: { error_description?: string } })?.value?.error_description ??
+          'Could not remove the deck',
+      ),
   })
 
   const sync = useMutation({
@@ -284,6 +288,12 @@ export function DeckDetailPage() {
   const hasCurve = curve.some((n) => n > 0)
 
   const isOwner = !!d?.user && d.user.id === me.data?.id
+  // Deletable: your personal deck, your linked player's deck, or a guest deck.
+  const canDelete = d
+    ? d.user
+      ? d.user.id === me.data?.id
+      : !d.owner?.userId || d.owner.userId === me.data?.id
+    : false
 
   const art = d?.commander?.artCropUrl
 
@@ -363,17 +373,19 @@ export function DeckDetailPage() {
                       </Button>
                     </a>
                   )}
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="text-destructive hover:bg-destructive/10"
-                    onClick={() => {
-                      if (confirm(`Delete "${d.name}"?`)) remove.mutate()
-                    }}
-                    disabled={remove.isPending}
-                  >
-                    <Trash2 /> Delete
-                  </Button>
+                  {canDelete && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="text-destructive hover:bg-destructive/10"
+                      onClick={() => {
+                        if (confirm(`Delete "${d.name}"?`)) remove.mutate()
+                      }}
+                      disabled={remove.isPending}
+                    >
+                      <Trash2 /> Delete
+                    </Button>
+                  )}
                 </div>
               </div>
               <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">

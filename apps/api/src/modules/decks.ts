@@ -429,11 +429,30 @@ export const decks = new Elysia({ prefix: '/decks' })
     const userId = await requireUserId(headers.authorization)
     const deck = await prisma.deck.findUnique({
       where: { id: params.id },
-      include: { owner: true },
+      include: { owner: true, _count: { select: { participations: true } } },
     })
     if (!deck || !(await canAccessDeck(userId, deck))) {
       set.status = 404
       return NOT_FOUND
+    }
+    // Visibility ≠ management: only the owning account may delete. Guest decks
+    // have no account behind them, so any member of their group can manage.
+    const ownerAccount = deck.userId ?? deck.owner?.userId
+    const canDelete = ownerAccount
+      ? ownerAccount === userId
+      : !!deck.owner?.groupId && (await isMember(userId, deck.owner.groupId))
+    if (!canDelete) {
+      set.status = 403
+      return { error: 'forbidden', error_description: 'Only the deck owner can delete it' }
+    }
+    // Decks that sat at a table anchor match history and stats — keep them.
+    if (deck._count.participations > 0) {
+      set.status = 409
+      return {
+        error: 'deck_in_use',
+        error_description:
+          'This deck has match history. Deleting it would break past matches and stats.',
+      }
     }
     return prisma.deck.delete({ where: { id: params.id } })
   })
