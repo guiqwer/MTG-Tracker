@@ -28,16 +28,22 @@ function RequireAuth() {
   return isAuthenticated() ? <Layout /> : <Navigate to="/login" replace />
 }
 
+// The mirror gate: landing/login/signup make no sense with a session — send
+// returning users straight into the app instead of asking them to log in again.
+function PublicOnly({ children }: { children: React.ReactNode }) {
+  return isAuthenticated() ? <Navigate to="/app" replace /> : children
+}
+
 export function App() {
   const theme = useTheme()
   return (
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
         <Routes>
-          {/* Public */}
-          <Route path="/" element={<LandingPage />} />
-          <Route path="/login" element={<LoginPage />} />
-          <Route path="/signup" element={<SignupPage />} />
+          {/* Public — with a session they bounce straight to /app */}
+          <Route path="/" element={<PublicOnly><LandingPage /></PublicOnly>} />
+          <Route path="/login" element={<PublicOnly><LoginPage /></PublicOnly>} />
+          <Route path="/signup" element={<PublicOnly><SignupPage /></PublicOnly>} />
 
           {/* App (requires login) */}
           <Route path="/app" element={<RequireAuth />}>
