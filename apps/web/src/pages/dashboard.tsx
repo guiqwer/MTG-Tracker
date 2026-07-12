@@ -75,6 +75,42 @@ const MANA_BAR: Record<string, string> = {
   G: 'bg-emerald-500',
 }
 
+// Color-identity nicknames every Commander table knows (keys in WUBRG order).
+const COMBO_NAME: Record<string, string> = {
+  '': 'Colorless',
+  W: 'Mono-White',
+  U: 'Mono-Blue',
+  B: 'Mono-Black',
+  R: 'Mono-Red',
+  G: 'Mono-Green',
+  WU: 'Azorius',
+  UB: 'Dimir',
+  BR: 'Rakdos',
+  RG: 'Gruul',
+  WG: 'Selesnya',
+  WB: 'Orzhov',
+  UR: 'Izzet',
+  BG: 'Golgari',
+  WR: 'Boros',
+  UG: 'Simic',
+  WUB: 'Esper',
+  UBR: 'Grixis',
+  BRG: 'Jund',
+  WRG: 'Naya',
+  WUG: 'Bant',
+  WBG: 'Abzan',
+  WUR: 'Jeskai',
+  UBG: 'Sultai',
+  WBR: 'Mardu',
+  URG: 'Temur',
+  WUBR: 'Yore-Tiller',
+  UBRG: 'Glint-Eye',
+  WBRG: 'Dune-Brood',
+  WURG: 'Ink-Treader',
+  WUBG: 'Witch-Maw',
+  WUBRG: 'Five-Color',
+}
+
 interface Insights {
   personalities: {
     key: string
@@ -86,7 +122,7 @@ interface Insights {
     count: number
   }[]
   winConditions: { condition: string; count: number }[]
-  colors: { color: string; wins: number }[]
+  colors: { colors: string[]; wins: number }[]
   podium: {
     id: string
     name: string
@@ -344,15 +380,27 @@ export function DashboardPage() {
             <CardContent className="p-5">
               <h3 className="mb-3 text-sm font-semibold">Winning colors</h3>
               {ins?.colors.length ? (
-                ins.colors.map((c) => (
-                  <BarRow
-                    key={c.color}
-                    label={<span className="inline-flex items-center gap-1.5"><i className={`ms ms-${c.color.toLowerCase()} ms-cost text-[0.7rem]`} />{c.color}</span>}
-                    value={c.wins}
-                    max={maxColor}
-                    barClass={MANA_BAR[c.color]}
-                  />
-                ))
+                ins.colors.map((c) => {
+                  const combo = c.colors.join('')
+                  return (
+                    <BarRow
+                      key={combo || 'C'}
+                      label={
+                        <span className="inline-flex max-w-full items-center gap-1.5">
+                          <ColorIdentity colors={c.colors} className="shrink-0 text-[0.7rem]" />
+                          <span className="truncate">{COMBO_NAME[combo] ?? combo}</span>
+                        </span>
+                      }
+                      value={c.wins}
+                      max={maxColor}
+                      barClass={
+                        c.colors.length > 1
+                          ? 'bg-gradient-to-r from-amber-300 to-amber-500'
+                          : (MANA_BAR[combo] ?? 'bg-zinc-400')
+                      }
+                    />
+                  )
+                })
               ) : (
                 <p className="py-6 text-center text-sm text-muted-foreground">No data yet</p>
               )}

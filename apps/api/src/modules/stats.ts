@@ -234,12 +234,15 @@ export const stats = new Elysia({ prefix: '/stats' })
         }
       }
 
+      // Winning colors count the winner's FULL color identity (a Rakdos win is
+      // one "BR" win) — splitting per color would read multicolor as N monos.
+      const WUBRG = ['W', 'U', 'B', 'R', 'G']
       const colorWins = new Map<string, number>()
       for (const m of matches) {
         const winner = m.participants.find(isWin)
-        for (const c of winner?.deck.colorIdentity ?? []) {
-          colorWins.set(c, (colorWins.get(c) ?? 0) + 1)
-        }
+        if (!winner) continue
+        const key = WUBRG.filter((c) => winner.deck.colorIdentity.includes(c)).join('')
+        colorWins.set(key, (colorWins.get(key) ?? 0) + 1)
       }
 
       // ── Podium & eliminations ────────────────────────────────────────────
@@ -363,9 +366,9 @@ export const stats = new Elysia({ prefix: '/stats' })
         winConditions: [...winConditions.entries()]
           .map(([condition, count]) => ({ condition, count }))
           .sort((a, b) => b.count - a.count),
-        colors: ['W', 'U', 'B', 'R', 'G']
-          .map((color) => ({ color, wins: colorWins.get(color) ?? 0 }))
-          .filter((c) => c.wins > 0),
+        colors: [...colorWins.entries()]
+          .map(([combo, wins]) => ({ colors: combo.split(''), wins }))
+          .sort((a, b) => b.wins - a.wins),
         podium,
         monthly,
         recent,
