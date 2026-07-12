@@ -2,8 +2,9 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { Archive, Download, Layers, Link2, User, X } from 'lucide-react'
+import { Archive, Download, Layers, Link2, Search, X } from 'lucide-react'
 import { api } from '@/lib/eden'
+import { cn } from '@/lib/utils'
 import { useActiveGroup } from '@/lib/group'
 import { useMe } from '@/lib/me'
 import { PageHeader } from '@/components/page-header'
@@ -14,6 +15,12 @@ import { Label } from '@/components/ui/label'
 import { Skeleton } from '@/components/ui/skeleton'
 import { EmptyState } from '@/components/empty-state'
 import { DeckCard } from '@/components/deck-card'
+import { Avatar } from '@/components/ui/avatar'
+
+const WUBRG = ['W', 'U', 'B', 'R', 'G'] as const
+
+const selectCls =
+  'h-9 rounded-md border border-input bg-transparent px-3 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring'
 
 export function DecksPage() {
   const qc = useQueryClient()
@@ -41,14 +48,50 @@ export function DecksPage() {
     },
   })
 
-  const myDecks = useQuery({
-    queryKey: ['my-decks'],
-    queryFn: async () => {
-      const { data, error } = await api.decks.mine.get()
-      if (error) throw error
-      return data
-    },
-  })
+  // Client-side filters — the group list is already fully loaded.
+  const [search, setSearch] = useState('')
+  const [colorFilter, setColorFilter] = useState<string[]>([])
+  const [playerFilter, setPlayerFilter] = useState('')
+  const hasFilters = !!search.trim() || colorFilter.length > 0 || !!playerFilter
+
+  type GroupDeck = NonNullable<NonNullable<typeof decks.data>>[number]
+  const deckMatches = (d: GroupDeck) => {
+    const q = search.trim().toLowerCase()
+    if (q && !`${d.name} ${d.commander?.name ?? ''}`.toLowerCase().includes(q)) return false
+    if (colorFilter.length && !colorFilter.every((c) => d.colorIdentity.includes(c))) return false
+    return true
+  }
+
+  // One section per person at the table. A member's group player and their
+  // personal (account) decks collapse into the same section via userId; guests
+  // key by their player row.
+  const sectionKeyOf = (d: GroupDeck) =>
+    d.user?.id ?? d.owner?.userId ?? (d.owner ? `guest:${d.owner.id}` : 'unowned')
+  const sections = (() => {
+    const map = new Map<
+      string,
+      { key: string; name: string; avatarColor: string | null; isMe: boolean; decks: GroupDeck[] }
+    >()
+    for (const d of decks.data ?? []) {
+      if (d.retiredAt) continue
+      const key = sectionKeyOf(d)
+      let s = map.get(key)
+      if (!s) {
+        s = {
+          key,
+          name: d.owner?.name ?? d.user?.username ?? 'No owner',
+          avatarColor: d.owner?.avatarColor ?? d.user?.avatarColor ?? null,
+          isMe: (d.user?.id ?? d.owner?.userId) === me.data?.id,
+          decks: [],
+        }
+        map.set(key, s)
+      }
+      s.decks.push(d)
+    }
+    return [...map.values()].sort(
+      (a, b) => Number(b.isMe) - Number(a.isMe) || a.name.localeCompare(b.name),
+    )
+  })()
 
   const importDeck = useMutation({
     mutationFn: async () => {
@@ -73,6 +116,7 @@ export function DecksPage() {
       setImportCommander('')
       setImportOpen(false)
       qc.invalidateQueries({ queryKey: ['my-decks'] })
+      qc.invalidateQueries({ queryKey: ['decks'] })
       if (d?.deck?.id) navigate(`/app/decks/${d.deck.id}`)
     },
     onError: (err) => {
@@ -194,24 +238,67 @@ export function DecksPage() {
         </Card>
       )}
 
-      {/* Personal decks — tied to your account, usable in any playgroup */}
-      {(myDecks.data?.filter((d) => !d.retiredAt).length ?? 0) > 0 && (
-        <section className="space-y-3">
-          <h2 className="flex items-center gap-2 text-sm font-semibold text-muted-foreground">
-            <User className="h-4 w-4" /> My decks
-            <span className="font-normal">— yours in every playgroup</span>
-          </h2>
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {myDecks.data!
-              .filter((d) => !d.retiredAt)
-              .map((d) => (
-                <DeckCard key={d.id} deck={d} onDelete={(id) => remove.mutate(id)} />
-              ))}
+      {/* Filter bar — search, color identity and player, all client-side */}
+      {(decks.data?.length ?? 0) > 0 && (
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="relative">
+            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+            <Input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Deck or commander…"
+              className="w-56 pl-8"
+            />
           </div>
-          <h2 className="pt-2 text-sm font-semibold text-muted-foreground">
-            {activeGroup!.name} decks
-          </h2>
-        </section>
+          <div className="flex items-center gap-1">
+            {WUBRG.map((c) => (
+              <button
+                key={c}
+                type="button"
+                title={`Has ${c} in its identity`}
+                onClick={() =>
+                  setColorFilter((prev) =>
+                    prev.includes(c) ? prev.filter((x) => x !== c) : [...prev, c],
+                  )
+                }
+                className={cn(
+                  'flex h-9 w-9 items-center justify-center rounded-full border transition-colors',
+                  colorFilter.includes(c)
+                    ? 'border-primary bg-primary/15'
+                    : 'border-input opacity-60 hover:bg-accent hover:opacity-100',
+                )}
+              >
+                <i className={`ms ms-${c.toLowerCase()} ms-cost`} />
+              </button>
+            ))}
+          </div>
+          <select
+            value={playerFilter}
+            onChange={(e) => setPlayerFilter(e.target.value)}
+            className={selectCls}
+          >
+            <option value="">All players</option>
+            {sections.map((s) => (
+              <option key={s.key} value={s.key}>
+                {s.name}
+                {s.isMe ? ' (you)' : ''}
+              </option>
+            ))}
+          </select>
+          {hasFilters && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                setSearch('')
+                setColorFilter([])
+                setPlayerFilter('')
+              }}
+            >
+              <X /> Clear
+            </Button>
+          )}
+        </div>
       )}
 
       {decks.isLoading ? (
@@ -232,34 +319,60 @@ export function DecksPage() {
           }
         />
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {decks.data
-            .filter((d) => (d.owner || d.user?.id !== me.data?.id) && !d.retiredAt)
-            .map((d) => {
-              // Delete only what's yours — guest decks (no account behind the
-              // player) are manageable by anyone in the group.
-              const mine = d.user
-                ? d.user.id === me.data?.id
-                : !d.owner?.userId || d.owner.userId === me.data?.id
-              return (
-                <DeckCard
-                  key={d.id}
-                  deck={d}
-                  onDelete={mine ? (id) => remove.mutate(id) : undefined}
-                />
-              )
-            })}
-        </div>
+        (() => {
+          // One section per player; filters apply inside each section and empty
+          // sections disappear.
+          const visible = sections
+            .filter((s) => !playerFilter || s.key === playerFilter)
+            .map((s) => ({ ...s, decks: s.decks.filter(deckMatches) }))
+            .filter((s) => s.decks.length > 0)
+          if (!visible.length) {
+            return (
+              <p className="py-10 text-center text-sm text-muted-foreground">
+                No decks match these filters.
+              </p>
+            )
+          }
+          return visible.map((s) => (
+            <section key={s.key} className="space-y-3">
+              <h2 className="flex items-center gap-2 text-sm font-semibold text-muted-foreground">
+                <Avatar name={s.name} color={s.avatarColor} size={22} />
+                {s.name}
+                {s.isMe && ' (you)'}
+                <span className="font-normal">
+                  — {s.decks.length} {s.decks.length === 1 ? 'deck' : 'decks'}
+                  {s.isMe ? ', yours in every playgroup' : ''}
+                </span>
+              </h2>
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {s.decks.map((d) => {
+                  // Delete only what's yours — guest decks (no account behind
+                  // the player) are manageable by anyone in the group.
+                  const mine = d.user
+                    ? d.user.id === me.data?.id
+                    : !d.owner?.userId || d.owner.userId === me.data?.id
+                  return (
+                    <DeckCard
+                      key={d.id}
+                      deck={d}
+                      onDelete={mine ? (id) => remove.mutate(id) : undefined}
+                    />
+                  )
+                })}
+              </div>
+            </section>
+          ))
+        })()
       )}
 
       {/* Retired decks — history stays, they just left the active rotation */}
       {(() => {
-        const seen = new Set<string>()
-        const retired = [...(decks.data ?? []), ...(myDecks.data ?? [])].filter((d) => {
-          if (!d.retiredAt || seen.has(d.id)) return false
-          seen.add(d.id)
-          return true
-        })
+        const retired = (decks.data ?? []).filter(
+          (d) =>
+            d.retiredAt &&
+            deckMatches(d) &&
+            (!playerFilter || sectionKeyOf(d) === playerFilter),
+        )
         if (!retired.length) return null
         return (
           <section className="space-y-3">

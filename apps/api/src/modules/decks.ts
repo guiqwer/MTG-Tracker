@@ -17,7 +17,7 @@ import { ensureDeckTagged } from '../lib/card-tags'
 // what the UI shows.
 const deckInclude = {
   owner: true,
-  user: { select: { id: true, username: true } },
+  user: { select: { id: true, username: true, avatarColor: true } },
   commander: true,
   partner: true,
   _count: { select: { participations: true, cards: true } },
