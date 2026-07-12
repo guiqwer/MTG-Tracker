@@ -236,15 +236,15 @@ export function MatchesPage() {
     setRows((prev) => prev.map((r, idx) => (idx === i ? { ...r, ...patch } : r)))
   // A seat can play the player's table decks plus the personal decks of the
   // account behind that seat (members bring their imports to any table).
+  // Guests (no account) can't import, so they borrow: any active deck.
   const decksByOwner = (ownerId: string) => {
     const player = players.data?.find((p) => p.id === ownerId)
-    return (
-      decks.data?.filter(
-        (d) =>
-          !d.retiredAt &&
-          (d.ownerId === ownerId ||
-            (!d.ownerId && player?.user && d.user?.id === player.user.id)),
-      ) ?? []
+    const active = decks.data?.filter((d) => !d.retiredAt) ?? []
+    if (player && !player.user) return active
+    return active.filter(
+      (d) =>
+        d.ownerId === ownerId ||
+        (!d.ownerId && player?.user && d.user?.id === player.user.id),
     )
   }
   const validRows = rows.filter((r) => r.playerId && r.deckId).length

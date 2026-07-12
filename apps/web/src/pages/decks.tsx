@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { Archive, Download, Layers, Link2, Plus, Search, User, X } from 'lucide-react'
+import { Archive, Download, Layers, Link2, User, X } from 'lucide-react'
 import { api } from '@/lib/eden'
 import { useActiveGroup } from '@/lib/group'
 import { useMe } from '@/lib/me'
@@ -14,17 +14,6 @@ import { Label } from '@/components/ui/label'
 import { Skeleton } from '@/components/ui/skeleton'
 import { EmptyState } from '@/components/empty-state'
 import { DeckCard } from '@/components/deck-card'
-import { ColorIdentity } from '@/components/mana'
-
-interface CommanderPick {
-  scryfallId: string
-  name: string
-  artCropUrl: string | null
-  colorIdentity: string[]
-}
-
-const selectCls =
-  'h-9 rounded-md border border-input bg-transparent px-3 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring'
 
 export function DecksPage() {
   const qc = useQueryClient()
@@ -33,15 +22,9 @@ export function DecksPage() {
   const { activeGroup } = useActiveGroup()
   const groupId = activeGroup!.id
   const me = useMe()
-  const [open, setOpen] = useState(false)
-  const [name, setName] = useState('')
-  const [ownerId, setOwnerId] = useState('')
-  const [archetype, setArchetype] = useState('')
-  const [powerLevel, setPowerLevel] = useState('')
-  const [query, setQuery] = useState('')
-  const [commander, setCommander] = useState<CommanderPick | null>(null)
 
-  // Import form (personal decks — portable to any playgroup).
+  // Import form (personal decks — portable to any playgroup). Importing is the
+  // ONLY way to add a deck: lists live on deck sites, matches live here.
   const [importOpen, setImportOpen] = useState(false)
   const [importMode, setImportMode] = useState<'url' | 'text'>('url')
   const [importUrl, setImportUrl] = useState('')
@@ -49,31 +32,12 @@ export function DecksPage() {
   const [importName, setImportName] = useState('')
   const [importCommander, setImportCommander] = useState('')
 
-  const players = useQuery({
-    queryKey: ['players', groupId],
-    queryFn: async () => {
-      const { data, error } = await api.players.get({ query: { groupId } })
-      if (error) throw error
-      return data && 'error' in data ? null : data
-    },
-  })
   const decks = useQuery({
     queryKey: ['decks', groupId],
     queryFn: async () => {
       const { data, error } = await api.decks.get({ query: { groupId } })
       if (error) throw error
       return data && 'error' in data ? null : data
-    },
-  })
-  const search = useQuery({
-    queryKey: ['cards', 'search', query],
-    enabled: query.trim().length >= 3 && !commander,
-    queryFn: async () => {
-      const { data, error } = await api.cards.search.get({
-        query: { q: query, commanders: 'true' },
-      })
-      if (error) throw error
-      return data
     },
   })
 
@@ -85,15 +49,6 @@ export function DecksPage() {
       return data
     },
   })
-
-  const reset = () => {
-    setName('')
-    setOwnerId('')
-    setArchetype('')
-    setPowerLevel('')
-    setCommander(null)
-    setQuery('')
-  }
 
   const importDeck = useMutation({
     mutationFn: async () => {
@@ -128,27 +83,6 @@ export function DecksPage() {
     },
   })
 
-  const create = useMutation({
-    mutationFn: async () => {
-      const { data, error } = await api.decks.post({
-        name,
-        ownerId,
-        commanderScryfallId: commander?.scryfallId,
-        archetype: archetype || undefined,
-        powerLevel: powerLevel ? Number(powerLevel) : undefined,
-      })
-      if (error) throw error
-      return data && 'error' in data ? null : data
-    },
-    onSuccess: (d) => {
-      toast.success(`Deck "${d?.name}" created`)
-      reset()
-      setOpen(false)
-      qc.invalidateQueries({ queryKey: ['decks'] })
-    },
-    onError: () => toast.error('Could not create the deck'),
-  })
-
   const remove = useMutation({
     mutationFn: async (id: string) => {
       const { error } = await api.decks({ id }).delete()
@@ -166,28 +100,14 @@ export function DecksPage() {
       ),
   })
 
-  const canSubmit = name.trim() && ownerId
-
   return (
     <div className="space-y-6">
       <PageHeader title="Decks" subtitle="Commanders imported from Scryfall." icon={Layers}>
         <Button
-          onClick={() => {
-            setImportOpen((v) => !v)
-            setOpen(false)
-          }}
-          variant={importOpen ? 'secondary' : 'outline'}
+          onClick={() => setImportOpen((v) => !v)}
+          variant={importOpen ? 'secondary' : 'default'}
         >
           {importOpen ? <X /> : <Download />} {importOpen ? 'Close' : 'Import deck'}
-        </Button>
-        <Button
-          onClick={() => {
-            setOpen((v) => !v)
-            setImportOpen(false)
-          }}
-          variant={open ? 'secondary' : 'default'}
-        >
-          {open ? <X /> : <Plus />} {open ? 'Close' : 'New deck'}
         </Button>
       </PageHeader>
 
@@ -294,122 +214,6 @@ export function DecksPage() {
         </section>
       )}
 
-      {open && (
-        <Card>
-          <CardContent className="space-y-4 p-5">
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="grid gap-1.5">
-                <Label>Deck name</Label>
-                <Input
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="e.g. Superfriends"
-                  autoFocus
-                />
-              </div>
-              <div className="grid gap-1.5">
-                <Label>Owner</Label>
-                <select
-                  value={ownerId}
-                  onChange={(e) => setOwnerId(e.target.value)}
-                  className={selectCls}
-                >
-                  <option value="">Select…</option>
-                  {players.data?.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="grid gap-1.5">
-                <Label>Archetype</Label>
-                <Input
-                  value={archetype}
-                  onChange={(e) => setArchetype(e.target.value)}
-                  placeholder="Aggro, Combo, Control…"
-                />
-              </div>
-              <div className="grid gap-1.5">
-                <Label>Power level (1–10)</Label>
-                <Input
-                  type="number"
-                  min={1}
-                  max={10}
-                  value={powerLevel}
-                  onChange={(e) => setPowerLevel(e.target.value)}
-                />
-              </div>
-            </div>
-
-            <div className="grid gap-1.5">
-              <Label>Commander</Label>
-              {commander ? (
-                <div className="flex items-center gap-3 rounded-md border p-2">
-                  {commander.artCropUrl && (
-                    <img
-                      src={commander.artCropUrl}
-                      alt=""
-                      className="h-10 w-16 rounded object-cover"
-                    />
-                  )}
-                  <div className="flex-1">
-                    <div className="font-medium">{commander.name}</div>
-                    <ColorIdentity colors={commander.colorIdentity} />
-                  </div>
-                  <Button variant="ghost" size="sm" onClick={() => setCommander(null)}>
-                    Change
-                  </Button>
-                </div>
-              ) : (
-                <div className="relative">
-                  <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    value={query}
-                    onChange={(e) => setQuery(e.target.value)}
-                    placeholder="Search commander (min. 3 letters)…"
-                    className="pl-8"
-                  />
-                  {search.data && search.data.length > 0 && (
-                    <div className="absolute z-10 mt-1 max-h-64 w-full overflow-auto rounded-md border bg-popover shadow-xl">
-                      {search.data.map((c) => (
-                        <button
-                          key={c.scryfallId}
-                          type="button"
-                          onClick={() =>
-                            setCommander({
-                              scryfallId: c.scryfallId,
-                              name: c.name,
-                              artCropUrl: c.artCropUrl,
-                              colorIdentity: c.colorIdentity,
-                            })
-                          }
-                          className="flex w-full cursor-pointer items-center gap-3 px-3 py-2 text-left transition-colors hover:bg-accent"
-                        >
-                          {c.artCropUrl && (
-                            <img
-                              src={c.artCropUrl}
-                              alt=""
-                              className="h-8 w-12 rounded object-cover"
-                            />
-                          )}
-                          <span className="flex-1 text-sm">{c.name}</span>
-                          <ColorIdentity colors={c.colorIdentity} />
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-
-            <Button disabled={!canSubmit || create.isPending} onClick={() => create.mutate()}>
-              <Plus /> Create deck
-            </Button>
-          </CardContent>
-        </Card>
-      )}
-
       {decks.isLoading ? (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {Array.from({ length: 6 }).map((_, i) => (
@@ -420,10 +224,10 @@ export function DecksPage() {
         <EmptyState
           icon={Layers}
           title="No decks yet"
-          description="Create a deck and search its commander straight from Scryfall — color identity is filled in automatically."
+          description="Import a deck from Moxfield, Archidekt, LigaMagic, TappedOut or Aetherhub — or paste the list as text."
           action={
-            <Button onClick={() => setOpen(true)}>
-              <Plus /> New deck
+            <Button onClick={() => setImportOpen(true)}>
+              <Download /> Import deck
             </Button>
           }
         />
