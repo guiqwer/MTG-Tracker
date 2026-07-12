@@ -226,21 +226,13 @@ export const stats = new Elysia({ prefix: '/stats' })
           count: p.top!.count,
         }))
 
-      // ── Meta: win conditions, seat winrate, winning colors ──────────────
+      // ── Meta: win conditions, winning colors ────────────────────────────
       const winConditions = new Map<string, number>()
       for (const m of matches) {
         if (m.winCondition) {
           winConditions.set(m.winCondition, (winConditions.get(m.winCondition) ?? 0) + 1)
         }
       }
-
-      const seats = [1, 2, 3, 4].map((seat) => {
-        const parts = matches.flatMap((m) =>
-          m.participants.filter((p) => p.seatOrder === seat),
-        )
-        const wins = parts.filter(isWin).length
-        return { seat, games: parts.length, wins, winrate: parts.length ? wins / parts.length : 0 }
-      })
 
       const colorWins = new Map<string, number>()
       for (const m of matches) {
@@ -318,14 +310,13 @@ export const stats = new Elysia({ prefix: '/stats' })
         })
       }
 
-      // ── Most played cards: only decks that actually hit this table (have a
-      // finished match here) count — no matches, no cards. Basics excluded.
-      const cardCounts = await prisma.deckCard.groupBy({
+      // ── Most played cards: cards actually logged on the event timeline of
+      // finished matches here — not deck contents. Basics excluded.
+      const cardCounts = await prisma.matchEvent.groupBy({
         by: ['cardId'],
         where: {
-          deck: {
-            participations: { some: { match: { groupId, status: 'FINISHED' } } },
-          },
+          match: { groupId, status: 'FINISHED' },
+          cardId: { not: null },
           card: { NOT: { typeLine: { startsWith: 'Basic Land' } } },
         },
         _count: { cardId: true },
@@ -333,16 +324,18 @@ export const stats = new Elysia({ prefix: '/stats' })
         take: 10,
       })
       const cardRows = await prisma.card.findMany({
-        where: { id: { in: cardCounts.map((c) => c.cardId) } },
+        where: { id: { in: cardCounts.map((c) => c.cardId!).filter(Boolean) } },
         select: { id: true, name: true, manaCost: true },
       })
       const cardById = new Map(cardRows.map((c) => [c.id, c]))
-      const topCards = cardCounts.map((c) => ({
-        id: c.cardId,
-        name: cardById.get(c.cardId)?.name ?? '?',
-        manaCost: cardById.get(c.cardId)?.manaCost ?? null,
-        decks: c._count.cardId,
-      }))
+      const topCards = cardCounts
+        .filter((c) => c.cardId)
+        .map((c) => ({
+          id: c.cardId!,
+          name: cardById.get(c.cardId!)?.name ?? '?',
+          manaCost: cardById.get(c.cardId!)?.manaCost ?? null,
+          plays: c._count.cardId,
+        }))
 
       const recent = matches.slice(0, 5).map((m) => {
         const winner = m.participants.find(isWin)
@@ -370,7 +363,6 @@ export const stats = new Elysia({ prefix: '/stats' })
         winConditions: [...winConditions.entries()]
           .map(([condition, count]) => ({ condition, count }))
           .sort((a, b) => b.count - a.count),
-        seats,
         colors: ['W', 'U', 'B', 'R', 'G']
           .map((color) => ({ color, wins: colorWins.get(color) ?? 0 }))
           .filter((c) => c.wins > 0),

@@ -86,7 +86,6 @@ interface Insights {
     count: number
   }[]
   winConditions: { condition: string; count: number }[]
-  seats: { seat: number; games: number; wins: number; winrate: number }[]
   colors: { color: string; wins: number }[]
   podium: {
     id: string
@@ -100,7 +99,7 @@ interface Insights {
     firstBlood: number
   }[]
   monthly: { month: string; matches: number }[]
-  topCards: { id: string; name: string; manaCost: string | null; decks: number }[]
+  topCards: { id: string; name: string; manaCost: string | null; plays: number }[]
   recent: {
     id: string
     playedAt: string
@@ -322,7 +321,7 @@ export function DashboardPage() {
       {/* Table meta */}
       <section className="space-y-3">
         <SectionTitle>Table meta</SectionTitle>
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           <Card>
             <CardContent className="p-5">
               <h3 className="mb-3 text-sm font-semibold">How games end</h3>
@@ -338,28 +337,6 @@ export function DashboardPage() {
               ) : (
                 <p className="py-6 text-center text-sm text-muted-foreground">No data yet</p>
               )}
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardContent className="p-5">
-              <h3 className="mb-3 text-sm font-semibold">Winrate by seat</h3>
-              {ins?.seats.some((s) => s.games > 0) ? (
-                ins.seats.map((s) => (
-                  <BarRow
-                    key={s.seat}
-                    label={`Seat ${s.seat}`}
-                    value={Math.round(s.winrate * 100)}
-                    max={100}
-                    suffix="%"
-                  />
-                ))
-              ) : (
-                <p className="py-6 text-center text-sm text-muted-foreground">No data yet</p>
-              )}
-              <p className="mt-2 text-[11px] text-muted-foreground">
-                Does going first really matter at your table?
-              </p>
             </CardContent>
           </Card>
 
@@ -390,15 +367,15 @@ export function DashboardPage() {
                   <BarRow
                     key={c.id}
                     label={c.name}
-                    value={c.decks}
-                    max={Math.max(...ins.topCards.map((x) => x.decks), 1)}
+                    value={c.plays}
+                    max={Math.max(...ins.topCards.map((x) => x.plays), 1)}
                   />
                 ))
               ) : (
                 <p className="py-6 text-center text-sm text-muted-foreground">No data yet</p>
               )}
               <p className="mt-2 text-[11px] text-muted-foreground">
-                From decks that played here, basics excluded.
+                Cards logged on match timelines, basics excluded.
               </p>
             </CardContent>
           </Card>
