@@ -4,6 +4,7 @@ import { importCard } from '../lib/cards'
 import { requireUserId } from '../security/tokens'
 import { isMember, FORBIDDEN_GROUP } from '../lib/membership'
 import { ensureDeckTagged } from '../lib/card-tags'
+import { matchLiveStream, publishMatchUpdate } from '../lib/live'
 
 const participantInclude = {
   player: true,
@@ -63,6 +64,27 @@ export const matches = new Elysia({ prefix: '/matches' })
       },
     })
   })
+  // Live view: a server-sent-events stream that pings whenever this match
+  // changes. Auth via ?token= because EventSource can't send headers (the
+  // global guard skips this path — see security/guard.ts).
+  .get(
+    '/:id/live',
+    async ({ params, query, set }) => {
+      let userId: string
+      try {
+        userId = await requireUserId(`Bearer ${query.token ?? ''}`)
+      } catch {
+        set.status = 401
+        return { error: 'invalid_token', error_description: 'Invalid or missing token' }
+      }
+      if (!(await canAccessMatch(userId, params.id))) {
+        set.status = 404
+        return NOT_FOUND
+      }
+      return matchLiveStream(params.id)
+    },
+    { query: t.Object({ token: t.Optional(t.String()) }) },
+  )
   .post(
     '/',
     async ({ headers, body, set }) => {
@@ -181,6 +203,7 @@ export const matches = new Elysia({ prefix: '/matches' })
           }),
         ),
       ])
+      publishMatchUpdate(params.id)
       return prisma.match.findUnique({
         where: { id: params.id },
         include: {
@@ -238,7 +261,7 @@ export const matches = new Elysia({ prefix: '/matches' })
         select: { sequence: true },
       })
       const card = body.cardScryfallId ? await importCard(body.cardScryfallId) : null
-      return prisma.matchEvent.create({
+      const event = await prisma.matchEvent.create({
         data: {
           matchId: params.id,
           sequence: last ? last.sequence + 1 : 1,
@@ -256,6 +279,8 @@ export const matches = new Elysia({ prefix: '/matches' })
           card: true,
         },
       })
+      publishMatchUpdate(params.id)
+      return event
     },
     {
       body: t.Object({
@@ -275,7 +300,9 @@ export const matches = new Elysia({ prefix: '/matches' })
       set.status = 404
       return NOT_FOUND
     }
-    return prisma.matchEvent.delete({ where: { id: params.eventId } })
+    const deleted = await prisma.matchEvent.delete({ where: { id: params.eventId } })
+    publishMatchUpdate(params.id)
+    return deleted
   })
   .delete('/:id', async ({ headers, params, set }) => {
     const userId = await requireUserId(headers.authorization)
@@ -283,5 +310,7 @@ export const matches = new Elysia({ prefix: '/matches' })
       set.status = 404
       return NOT_FOUND
     }
-    return prisma.match.delete({ where: { id: params.id } })
+    const deleted = await prisma.match.delete({ where: { id: params.id } })
+    publishMatchUpdate(params.id) // viewers refetch, get a 404 and bail out
+    return deleted
   })

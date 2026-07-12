@@ -29,6 +29,7 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 import { api } from '@/lib/eden'
+import { getToken } from '@/lib/auth'
 import { cn } from '@/lib/utils'
 import { PageHeader } from '@/components/page-header'
 import { Card, CardContent } from '@/components/ui/card'
@@ -119,6 +120,25 @@ export function MatchDetailPage() {
       return data && 'error' in data ? null : data
     },
   })
+
+  // Live view: while the match runs, an SSE stream pings on every change made
+  // by anyone at the table and we refetch — no F5 needed. EventSource
+  // reconnects on its own, and the server's greeting message doubles as a
+  // catch-up refetch after any disconnect.
+  const matchStatus = match.data?.status
+  useEffect(() => {
+    if (matchStatus !== 'IN_PROGRESS') return
+    const token = getToken()
+    if (!token) return
+    const es = new EventSource(
+      `/api/matches/${matchId}/live?token=${encodeURIComponent(token)}`,
+    )
+    es.onmessage = () => {
+      qc.invalidateQueries({ queryKey: ['match', matchId] })
+      qc.invalidateQueries({ queryKey: ['matches'] })
+    }
+    return () => es.close()
+  }, [matchStatus, matchId, qc])
 
   const [type, setType] = useState('REMOVAL')
   const [actorId, setActorId] = useState('')

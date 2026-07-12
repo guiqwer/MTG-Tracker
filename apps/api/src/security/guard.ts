@@ -3,6 +3,10 @@ import { readBearerToken, verifyAccessToken } from './tokens'
 // Endpoints reachable without an access token.
 const PUBLIC_PATHS = new Set(['/', '/health', '/auth/signup', '/auth/login'])
 
+// SSE live streams: EventSource can't set an Authorization header, so the
+// token travels as a query param and the route handler verifies it itself.
+const SSE_PATH = /^\/matches\/[^/]+\/live$/
+
 // RFC 6750 section 3.1 challenge returned for a missing/invalid/expired token.
 const WWW_AUTHENTICATE =
   'Bearer, error="invalid_token", error_description="Missing, invalid or expired access token"'
@@ -24,6 +28,7 @@ export async function checkAuth(
 ): Promise<AuthDenied | null> {
   if (method === 'OPTIONS') return null
   if (PUBLIC_PATHS.has(path)) return null
+  if (SSE_PATH.test(path)) return null
 
   const token = readBearerToken(authorization)
   if (!token) return deny('No bearer access token in the Authorization header')
