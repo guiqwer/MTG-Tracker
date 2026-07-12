@@ -38,6 +38,20 @@ interface CardRow {
   }
 }
 
+// Friendly label for the deck's source site, from its stored link.
+function sourceSiteName(url: string): string {
+  const sites: [RegExp, string][] = [
+    [/moxfield\.com/, 'Moxfield'],
+    [/archidekt\.com/, 'Archidekt'],
+    [/ligamagic\.com/, 'LigaMagic'],
+    [/tappedout\.net/, 'TappedOut'],
+    [/aetherhub\.com/, 'Aetherhub'],
+    [/deckstats\.net/, 'Deckstats'],
+    [/mtggoldfish\.com/, 'MTGGoldfish'],
+  ]
+  return sites.find(([re]) => re.test(url))?.[1] ?? 'Source'
+}
+
 // Plain-text list in the format Moxfield/Arena accept — for copy and export.
 function buildDecklist(d: {
   commander: { name: string } | null
@@ -235,7 +249,7 @@ export function DeckDetailPage() {
       toast.success(
         r?.notFound?.length
           ? `Synced — ${r.notFound.length} card(s) not found`
-          : 'Deck synced with Moxfield',
+          : 'Deck synced with its source list',
       )
       qc.invalidateQueries({ queryKey: ['deck', id] })
       qc.invalidateQueries({ queryKey: ['my-decks'] })
@@ -381,7 +395,7 @@ export function DeckDetailPage() {
                       size="sm"
                       onClick={() => sync.mutate()}
                       disabled={sync.isPending}
-                      title="Re-import from Moxfield"
+                      title="Re-import from the source site"
                     >
                       <RefreshCw className={cn(sync.isPending && 'animate-spin')} />
                       {sync.isPending ? 'Syncing…' : 'Sync'}
@@ -390,7 +404,7 @@ export function DeckDetailPage() {
                   {d.moxfieldUrl && (
                     <a href={d.moxfieldUrl} target="_blank" rel="noreferrer">
                       <Button variant="outline" size="sm">
-                        <ExternalLink /> Moxfield
+                        <ExternalLink /> {sourceSiteName(d.moxfieldUrl)}
                       </Button>
                     </a>
                   )}
@@ -517,7 +531,7 @@ export function DeckDetailPage() {
           {d.cards.length === 0 ? (
             <Card>
               <CardContent className="py-12 text-center text-sm text-muted-foreground">
-                This deck has no imported card list. Decks imported from a Moxfield link or a
+                This deck has no imported card list. Decks imported from a deck link or a
                 pasted decklist show their full 100 cards here.
               </CardContent>
             </Card>

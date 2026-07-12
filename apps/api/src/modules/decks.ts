@@ -3,9 +3,9 @@ import { prisma } from '../lib/prisma'
 import { importCard } from '../lib/cards'
 import { fetchCollection, type CardIdentifier, type ScryfallCard } from '../lib/scryfall'
 import {
-  fetchMoxfieldDeck,
-  parseMoxfieldUrl,
+  findDeckSource,
   parseTextDecklist,
+  SUPPORTED_DECK_SITES,
   type ParsedDeck,
   type ParsedEntry,
 } from '../lib/decklist'
@@ -66,17 +66,54 @@ async function canManageDeck(
   return !!deck.owner?.groupId && isMember(userId, deck.owner.groupId)
 }
 
-// Resolve parsed entries to cards in our DB via one bulk Scryfall lookup.
-async function resolveEntries(entries: ParsedEntry[]) {
-  const identifiers: CardIdentifier[] = []
-  const seen = new Set<string>()
+// Resolve parsed entries to cards in our DB. Cards imported once by ANYONE are
+// served straight from the DB — staples cost zero external requests; only
+// genuinely new cards go to Scryfall (bulk, 75 identifiers per request).
+// `refresh: true` (sync) skips the cache so prices come back fresh.
+type ResolvedHit = {
+  db: { id: string; colorIdentity: string[] }
+  scryfall?: ScryfallCard
+}
+
+async function resolveEntries(entries: ParsedEntry[], opts: { refresh?: boolean } = {}) {
+  const wantIds = new Set<string>()
+  const wantNames = new Map<string, string>() // lowercase -> original casing
   for (const e of entries) {
-    const key = e.scryfallId ?? `name:${e.name?.toLowerCase()}`
-    if (!key || seen.has(key)) continue
-    seen.add(key)
-    identifiers.push(e.scryfallId ? { id: e.scryfallId } : { name: e.name! })
+    if (e.scryfallId) wantIds.add(e.scryfallId)
+    else if (e.name) wantNames.set(e.name.toLowerCase(), e.name)
   }
-  const { cards, notFound } = await fetchCollection(identifiers)
+
+  const cardSelect = { id: true, scryfallId: true, name: true, colorIdentity: true } as const
+  const cachedById = new Map<string, ResolvedHit>()
+  const cachedByName = new Map<string, ResolvedHit>()
+  if (!opts.refresh && (wantIds.size > 0 || wantNames.size > 0)) {
+    const cached = await prisma.card.findMany({
+      where: {
+        OR: [
+          { scryfallId: { in: [...wantIds] } },
+          { name: { in: [...wantNames.values()], mode: 'insensitive' } },
+        ],
+      },
+      select: cardSelect,
+    })
+    for (const c of cached) {
+      const hit = { db: { id: c.id, colorIdentity: c.colorIdentity } }
+      cachedById.set(c.scryfallId, hit)
+      cachedByName.set(c.name.toLowerCase(), hit)
+      cachedByName.set(c.name.split(' // ')[0].toLowerCase(), hit)
+    }
+  }
+
+  // Whatever the cache didn't cover goes to Scryfall in one bulk lookup.
+  const identifiers: CardIdentifier[] = []
+  for (const id of wantIds) if (!cachedById.has(id)) identifiers.push({ id })
+  for (const [lower, original] of wantNames) {
+    // Scryfall's collection lookup matches front faces; full "A // B" names miss.
+    if (!cachedByName.has(lower)) identifiers.push({ name: original.split(' // ')[0] })
+  }
+  const { cards, notFound } = identifiers.length
+    ? await fetchCollection(identifiers)
+    : { cards: [] as ScryfallCard[], notFound: [] as string[] }
 
   // Index by scryfall id + full name + front-face name so text entries like
   // "Fire" still match "Fire // Ice".
@@ -90,7 +127,6 @@ async function resolveEntries(entries: ParsedEntry[]) {
   // Bulk-store: one read for what we already have, one createMany for the
   // rest, one re-read — 3 queries instead of one upsert per card.
   const scryfallIds = cards.map((c) => c.scryfallId)
-  const cardSelect = { id: true, scryfallId: true, colorIdentity: true } as const
   const existing = await prisma.card.findMany({
     where: { scryfallId: { in: scryfallIds } },
     select: cardSelect,
@@ -109,7 +145,11 @@ async function resolveEntries(entries: ParsedEntry[]) {
     rows.map((r) => [r.scryfallId, { id: r.id, colorIdentity: r.colorIdentity }]),
   )
 
-  const lookup = (e: ParsedEntry) => {
+  const lookup = (e: ParsedEntry): ResolvedHit | null => {
+    const cachedHit = e.scryfallId
+      ? cachedById.get(e.scryfallId)
+      : cachedByName.get(e.name?.toLowerCase() ?? '')
+    if (cachedHit) return cachedHit
     const sc = e.scryfallId
       ? byKey.get(e.scryfallId)
       : byKey.get(e.name?.toLowerCase() ?? '')
@@ -119,13 +159,9 @@ async function resolveEntries(entries: ParsedEntry[]) {
 }
 
 // Shared by import and sync: commanders drive identity, mainboard rows are
-// aggregated by card, and fresh Scryfall prices are collected for updates.
-function buildDeckPayload(
-  parsed: ParsedDeck,
-  lookup: (
-    e: ParsedEntry,
-  ) => { scryfall: ScryfallCard; db: { id: string; colorIdentity: string[] } } | null,
-) {
+// aggregated by card, and fresh Scryfall prices are collected for updates
+// (cache hits carry no scryfall payload, so they never touch prices).
+function buildDeckPayload(parsed: ParsedDeck, lookup: (e: ParsedEntry) => ResolvedHit | null) {
   const commanderCards = parsed.commanders
     .map(lookup)
     .filter((c): c is NonNullable<typeof c> => c !== null)
@@ -141,12 +177,12 @@ function buildDeckPayload(
     const hit = lookup(entry)
     if (!hit) return
     quantities.set(hit.db.id, (quantities.get(hit.db.id) ?? 0) + entry.quantity)
-    if (hit.scryfall.priceUsd != null) prices.set(hit.db.id, hit.scryfall.priceUsd)
+    if (hit.scryfall?.priceUsd != null) prices.set(hit.db.id, hit.scryfall.priceUsd)
   }
   for (const entry of parsed.mainboard) add(entry)
   for (const c of commanderCards) {
     if (!quantities.has(c.db.id)) quantities.set(c.db.id, 1)
-    if (c.scryfall.priceUsd != null) prices.set(c.db.id, c.scryfall.priceUsd)
+    if (c.scryfall?.priceUsd != null) prices.set(c.db.id, c.scryfall.priceUsd)
   }
 
   return {
@@ -195,7 +231,7 @@ export const decks = new Elysia({ prefix: '/decks' })
       }),
     )
   })
-  // Import a personal deck from a Moxfield link or a pasted decklist.
+  // Import a personal deck from a deck-site link or a pasted decklist.
   .post(
     '/import',
     async ({ headers, body, set }) => {
@@ -203,21 +239,21 @@ export const decks = new Elysia({ prefix: '/decks' })
 
       let parsed: ParsedDeck
       if (body.url) {
-        const publicId = parseMoxfieldUrl(body.url)
-        if (!publicId) {
+        const source = findDeckSource(body.url)
+        if (!source) {
           set.status = 400
           return {
             error: 'invalid_url',
-            error_description: 'That does not look like a Moxfield deck link',
+            error_description: `That does not look like a deck link — paste one from ${SUPPORTED_DECK_SITES}`,
           }
         }
         try {
-          parsed = await fetchMoxfieldDeck(publicId)
+          parsed = await source.fetch()
         } catch (e) {
           set.status = 502
           return {
-            error: 'moxfield_failed',
-            error_description: `Could not fetch the deck from Moxfield (${
+            error: 'import_failed',
+            error_description: `Could not fetch the deck from ${source.site} (${
               e instanceof Error ? e.message : 'unknown error'
             }). Try pasting the decklist as text instead.`,
           }
@@ -232,7 +268,7 @@ export const decks = new Elysia({ prefix: '/decks' })
         set.status = 400
         return {
           error: 'empty_import',
-          error_description: 'Provide a Moxfield link or paste a decklist',
+          error_description: 'Provide a deck link or paste a decklist',
         }
       }
 
@@ -289,30 +325,31 @@ export const decks = new Elysia({ prefix: '/decks' })
       set.status = 403
       return { error: 'forbidden', error_description: 'Only the deck owner can sync it' }
     }
-    const publicId = deck.moxfieldUrl ? parseMoxfieldUrl(deck.moxfieldUrl) : null
-    if (!publicId) {
+    const source = deck.moxfieldUrl ? findDeckSource(deck.moxfieldUrl) : null
+    if (!source) {
       set.status = 400
       return {
         error: 'not_linked',
-        error_description: 'This deck is not linked to a Moxfield list',
+        error_description: 'This deck is not linked to a deck-site list',
       }
     }
     let parsed: ParsedDeck
     try {
-      parsed = await fetchMoxfieldDeck(publicId)
+      parsed = await source.fetch()
     } catch (e) {
       set.status = 502
       return {
-        error: 'moxfield_failed',
-        error_description: `Could not fetch the deck from Moxfield (${
+        error: 'import_failed',
+        error_description: `Could not fetch the deck from ${source.site} (${
           e instanceof Error ? e.message : 'unknown error'
         })`,
       }
     }
-    const { lookup, notFound } = await resolveEntries([
-      ...parsed.commanders,
-      ...parsed.mainboard,
-    ])
+    // refresh: skip the DB cache so card prices come back fresh from Scryfall.
+    const { lookup, notFound } = await resolveEntries(
+      [...parsed.commanders, ...parsed.mainboard],
+      { refresh: true },
+    )
     const payload = buildDeckPayload(parsed, lookup)
 
     // One transaction: fresh prices, swap the list, update the header fields.

@@ -200,7 +200,7 @@ export function DecksPage() {
                 variant={importMode === 'url' ? 'default' : 'outline'}
                 onClick={() => setImportMode('url')}
               >
-                <Link2 /> From Moxfield link
+                <Link2 /> From deck link
               </Button>
               <Button
                 size="sm"
@@ -213,15 +213,16 @@ export function DecksPage() {
 
             {importMode === 'url' ? (
               <div className="grid gap-1.5">
-                <Label>Moxfield deck link</Label>
+                <Label>Deck link</Label>
                 <Input
                   value={importUrl}
                   onChange={(e) => setImportUrl(e.target.value)}
-                  placeholder="https://moxfield.com/decks/…"
+                  placeholder="https://moxfield.com/decks/… (or Archidekt, LigaMagic, TappedOut, Aetherhub)"
                   autoFocus
                 />
                 <p className="text-xs text-muted-foreground">
-                  The deck name, commander and all 100 cards come straight from Moxfield.
+                  Moxfield, Archidekt, LigaMagic, TappedOut and Aetherhub links import the
+                  full list — commander included where the site marks it.
                 </p>
               </div>
             ) : (
