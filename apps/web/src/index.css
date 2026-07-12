@@ -126,6 +126,17 @@
   td {
     font-variant-numeric: tabular-nums;
   }
+  /* Native <select> option lists: our selects are bg-transparent, and some
+     browsers resolve that to a WHITE popup in dark mode instead of honoring
+     color-scheme — pin the popup colors to the theme tokens explicitly. */
+  select {
+    color: var(--foreground);
+  }
+  option,
+  optgroup {
+    background-color: var(--popover);
+    color: var(--popover-foreground);
+  }
 }
 
 @layer base {
