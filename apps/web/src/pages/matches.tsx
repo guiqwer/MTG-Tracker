@@ -27,6 +27,7 @@ import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { EmptyState } from '@/components/empty-state'
 import { ColorIdentity } from '@/components/mana'
+import { CardHover } from '@/components/card-hover'
 
 const WINCON_LABEL: Record<string, string> = {
   COMMANDER_DAMAGE: 'Commander Damage',
@@ -338,7 +339,12 @@ export function MatchesPage() {
                       won ? 'border-gold/50 bg-gold/10' : 'bg-muted/50',
                     )}
                   >
-                    <div className="h-12 w-12 shrink-0 overflow-hidden rounded-md">
+                    <CardHover
+                      as="div"
+                      image={p.deck.commander?.imageUrl}
+                      name={p.deck.commander?.name ?? ''}
+                      className="h-12 w-12 shrink-0 overflow-hidden rounded-md"
+                    >
                       {art ? (
                         <img src={art} alt="" loading="lazy" className="h-full w-full object-cover" />
                       ) : (
@@ -346,7 +352,7 @@ export function MatchesPage() {
                           <ColorIdentity colors={[]} className="text-sm" />
                         </div>
                       )}
-                    </div>
+                    </CardHover>
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-1.5">
                         {!isLive && <PlacementBadge place={p.placement} won={won} />}

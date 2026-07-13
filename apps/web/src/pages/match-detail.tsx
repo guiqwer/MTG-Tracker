@@ -39,6 +39,7 @@ import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Avatar } from '@/components/ui/avatar'
+import { CardHover } from '@/components/card-hover'
 
 const EVENT_META: Record<string, { label: string; icon: LucideIcon; tint: string }> = {
   REMOVAL: { label: 'Removal', icon: Zap, tint: 'text-red-400' },
@@ -76,6 +77,7 @@ interface CardPick {
   scryfallId: string
   name: string
   artCropUrl: string | null
+  imageUrl: string | null
 }
 
 // Event types that map to a Scryfall Tagger oracle tag — for these the card
@@ -95,6 +97,7 @@ interface TaggedCard {
   manaCost: string | null
   typeLine: string | null
   artCropUrl: string | null
+  imageUrl: string | null
   oracleTags: string[]
 }
 
@@ -327,13 +330,21 @@ export function MatchDetailPage() {
                 </>
               )}
               {ev.card && (
-                <span className={cn(countered && 'line-through')}>· {ev.card.name}</span>
+                <CardHover
+                  image={ev.card.imageUrl}
+                  name={ev.card.name}
+                  className={cn(countered && 'line-through')}
+                >
+                  · {ev.card.name}
+                </CardHover>
               )}
             </div>
             {ev.note && <p className="mt-1 text-xs text-muted-foreground">{ev.note}</p>}
           </div>
           {ev.card?.artCropUrl && (
-            <img src={ev.card.artCropUrl} alt="" className="h-9 w-14 rounded object-cover" />
+            <CardHover as="div" image={ev.card.imageUrl} name={ev.card.name} className="shrink-0">
+              <img src={ev.card.artCropUrl} alt="" className="block h-9 w-14 rounded object-cover" />
+            </CardHover>
           )}
           <Button
             variant="ghost"
@@ -696,7 +707,12 @@ export function MatchDetailPage() {
                 <div className="grid gap-1.5">
                   <Label>Card (optional)</Label>
                   {card ? (
-                    <div className="flex items-center gap-2 rounded-md border p-2">
+                    <CardHover
+                      as="div"
+                      image={card.imageUrl}
+                      name={card.name}
+                      className="flex items-center gap-2 rounded-md border p-2"
+                    >
                       {card.artCropUrl && (
                         <img src={card.artCropUrl} alt="" className="h-8 w-12 rounded object-cover" />
                       )}
@@ -704,25 +720,28 @@ export function MatchDetailPage() {
                       <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setCard(null)}>
                         <X className="h-3.5 w-3.5" />
                       </Button>
-                    </div>
+                    </CardHover>
                   ) : (
                     <div className="space-y-2">
                       {commanderPick && (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="w-full justify-start gap-2"
-                          onClick={() =>
-                            setCard({
-                              scryfallId: commanderPick.scryfallId,
-                              name: commanderPick.name,
-                              artCropUrl: commanderPick.artCropUrl,
-                            })
-                          }
-                        >
-                          <Crown className="h-3.5 w-3.5 text-amber-400" />
-                          <span className="truncate">{commanderPick.name}</span>
-                        </Button>
+                        <CardHover as="div" image={commanderPick.imageUrl} name={commanderPick.name}>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="w-full justify-start gap-2"
+                            onClick={() =>
+                              setCard({
+                                scryfallId: commanderPick.scryfallId,
+                                name: commanderPick.name,
+                                artCropUrl: commanderPick.artCropUrl,
+                                imageUrl: commanderPick.imageUrl,
+                              })
+                            }
+                          >
+                            <Crown className="h-3.5 w-3.5 text-amber-400" />
+                            <span className="truncate">{commanderPick.name}</span>
+                          </Button>
+                        </CardHover>
                       )}
                       {!actorId ? (
                         <p className="text-xs text-muted-foreground">
@@ -743,6 +762,7 @@ export function MatchDetailPage() {
                                 scryfallId: c.scryfallId,
                                 name: c.name,
                                 artCropUrl: c.artCropUrl,
+                                imageUrl: c.imageUrl,
                               })
                           }}
                         >

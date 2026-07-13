@@ -399,6 +399,7 @@ export const decks = new Elysia({ prefix: '/decks' })
             manaCost: true,
             typeLine: true,
             artCropUrl: true,
+            imageUrl: true,
             oracleTags: true,
           },
         },

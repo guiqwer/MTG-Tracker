@@ -1,5 +1,3 @@
-import { useEffect, useRef, useState } from 'react'
-import { createPortal } from 'react-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { toast } from 'sonner'
@@ -22,6 +20,7 @@ import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Card, CardContent } from '@/components/ui/card'
 import { ColorIdentity, ManaCost } from '@/components/mana'
+import { CardHover } from '@/components/card-hover'
 
 interface CardRow {
   id: string
@@ -121,41 +120,9 @@ function bucketOf(typeLine: string | null): string {
   return 'Other'
 }
 
-// Hover preview dimensions (standard card ratio 488x680 at 240px wide).
-const PREVIEW_W = 240
-const PREVIEW_H = Math.round((PREVIEW_W * 680) / 488)
-
 function CardLine({ row }: { row: CardRow }) {
-  const ref = useRef<HTMLLIElement>(null)
-  const [pos, setPos] = useState<{ top: number; left: number } | null>(null)
-
-  // Scrolling doesn't fire mouseleave, so a preview could linger with stale
-  // coordinates — dismiss it on any scroll while visible.
-  useEffect(() => {
-    if (!pos) return
-    const hide = () => setPos(null)
-    window.addEventListener('scroll', hide, { passive: true, capture: true })
-    return () => window.removeEventListener('scroll', hide, { capture: true })
-  }, [pos])
-
-  // Moxfield-style preview: fixed-position beside the row, clamped to the
-  // viewport — never clipped at the page bottom and never shifts the layout.
-  const show = () => {
-    if (!row.card.imageUrl || !ref.current) return
-    if (!window.matchMedia('(hover: hover)').matches) return // skip touch
-    const r = ref.current.getBoundingClientRect()
-    let left = r.right + 10
-    if (left + PREVIEW_W > window.innerWidth - 8) left = r.left - PREVIEW_W - 10
-    if (left < 8) left = 8
-    const top = Math.max(
-      8,
-      Math.min(r.top + r.height / 2 - PREVIEW_H / 2, window.innerHeight - PREVIEW_H - 8),
-    )
-    setPos({ top, left })
-  }
-
   return (
-    <li ref={ref} onMouseEnter={show} onMouseLeave={() => setPos(null)}>
+    <CardHover as="li" image={row.card.imageUrl} name={row.card.name}>
       <div className="flex items-center gap-2 rounded-md px-2 py-1 text-sm transition-colors hover:bg-accent">
         <span className="w-5 shrink-0 text-right text-xs tabular-nums text-muted-foreground">
           {row.quantity}
@@ -163,27 +130,7 @@ function CardLine({ row }: { row: CardRow }) {
         <span className="min-w-0 flex-1 truncate">{row.card.name}</span>
         <ManaCost cost={row.card.manaCost} className="shrink-0 text-[0.6rem]" />
       </div>
-      {pos &&
-        row.card.imageUrl &&
-        // Portal to <body>: position:fixed must not be re-anchored by any
-        // transformed ancestor (e.g. the page-enter animation wrapper).
-        createPortal(
-          <div
-            className="pointer-events-none fixed z-50"
-            style={{ top: pos.top, left: pos.left, width: PREVIEW_W, height: PREVIEW_H }}
-          >
-            <img
-              src={row.card.imageUrl}
-              alt={row.card.name}
-              width={PREVIEW_W}
-              height={PREVIEW_H}
-              className="h-full w-full rounded-xl shadow-2xl"
-              loading="lazy"
-            />
-          </div>,
-          document.body,
-        )}
-    </li>
+    </CardHover>
   )
 }
 
