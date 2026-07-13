@@ -73,11 +73,38 @@ const WINCON_LABEL: Record<string, string> = {
 const selectCls =
   'h-9 rounded-md border border-input bg-transparent px-2 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring'
 
+const chipCls = (active: boolean) =>
+  cn(
+    'flex h-7 items-center gap-1.5 rounded-full border px-2.5 text-xs transition-colors',
+    active
+      ? 'border-primary bg-primary/15 font-medium text-foreground'
+      : 'border-border/70 bg-muted/40 text-muted-foreground hover:bg-accent hover:text-foreground',
+  )
+
 interface CardPick {
   scryfallId: string
   name: string
   artCropUrl: string | null
   imageUrl: string | null
+}
+
+function PickedCard({ card, onClear }: { card: CardPick; onClear: () => void }) {
+  return (
+    <CardHover
+      as="div"
+      image={card.imageUrl}
+      name={card.name}
+      className="flex items-center gap-2 rounded-md border p-2"
+    >
+      {card.artCropUrl && (
+        <img src={card.artCropUrl} alt="" className="h-8 w-12 rounded object-cover" />
+      )}
+      <span className="flex-1 truncate text-sm">{card.name}</span>
+      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onClear}>
+        <X className="h-3.5 w-3.5" />
+      </Button>
+    </CardHover>
+  )
 }
 
 // Event types that map to a Scryfall Tagger oracle tag — for these the card
@@ -149,6 +176,7 @@ export function MatchDetailPage() {
   const [turn, setTurn] = useState('')
   const [note, setNote] = useState('')
   const [card, setCard] = useState<CardPick | null>(null)
+  const [targetCard, setTargetCard] = useState<CardPick | null>(null)
 
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: ['match', matchId] })
@@ -164,6 +192,7 @@ export function MatchDetailPage() {
         targetId: targetId || undefined,
         turn: turn ? Number(turn) : undefined,
         cardScryfallId: card?.scryfallId,
+        targetCardScryfallId: targetCard?.scryfallId,
         note: note || undefined,
         respondsToId: respondTo?.id,
       })
@@ -174,6 +203,7 @@ export function MatchDetailPage() {
       toast.success('Event added to timeline')
       setNote('')
       setCard(null)
+      setTargetCard(null)
       setRespondTo(null)
       invalidate()
     },
@@ -244,6 +274,18 @@ export function MatchDetailPage() {
       ? actor.deck.commander
       : null
 
+  // The targeted card comes from the *target* player's deck (their commander
+  // is the most common target, so it gets a quick-pick button).
+  const target = participants.find((p) => p.id === targetId)
+  const targetDeckId = target?.deck?.id
+  const targetTags = useQuery({
+    queryKey: ['deck-card-tags', targetDeckId],
+    enabled: !!targetDeckId,
+    staleTime: Infinity,
+    queryFn: () => fetchDeckTags(targetDeckId!),
+  })
+  const targetCommander = target?.deck?.commander ?? null
+
   // The stack: events chained via respondsToId render as nested responses.
   const [respondTo, setRespondTo] = useState<{ id: string; label: string } | null>(null)
   const eventTree = useMemo(() => {
@@ -280,6 +322,17 @@ export function MatchDetailPage() {
     setType('COUNTER')
     if (ev.actorId) setTargetId(ev.actorId)
     setCard(null)
+    // A response targets the parent's spell — prefill it as the targeted card.
+    setTargetCard(
+      ev.card
+        ? {
+            scryfallId: ev.card.scryfallId,
+            name: ev.card.name,
+            artCropUrl: ev.card.artCropUrl,
+            imageUrl: ev.card.imageUrl,
+          }
+        : null,
+    )
   }
 
   const renderEvent = (ev: (typeof events)[number]): ReactNode => {
@@ -336,6 +389,15 @@ export function MatchDetailPage() {
                   className={cn(countered && 'line-through')}
                 >
                   · {ev.card.name}
+                </CardHover>
+              )}
+              {ev.targetCard && (
+                <CardHover
+                  image={ev.targetCard.imageUrl}
+                  name={ev.targetCard.name}
+                  className={cn(countered && 'line-through')}
+                >
+                  {ev.card ? 'on' : '·'} {ev.targetCard.name}
                 </CardHover>
               )}
             </div>
@@ -641,7 +703,10 @@ export function MatchDetailPage() {
                       variant="ghost"
                       size="icon"
                       className="h-6 w-6 shrink-0"
-                      onClick={() => setRespondTo(null)}
+                      onClick={() => {
+                        setRespondTo(null)
+                        setTargetCard(null)
+                      }}
                       title="Cancel response"
                     >
                       <X className="h-3 w-3" />
@@ -650,77 +715,75 @@ export function MatchDetailPage() {
                 )}
 
                 <div className="grid gap-1.5">
-                  <Label>Type</Label>
-                  <select value={type} onChange={(e) => setType(e.target.value)} className={selectCls}>
-                    {EVENT_TYPES.map((t) => (
-                      <option key={t} value={t}>
-                        {EVENT_META[t].label}
-                      </option>
+                  <Label>What happened</Label>
+                  <div className="grid grid-cols-3 gap-1.5">
+                    {EVENT_TYPES.map((t) => {
+                      const meta = EVENT_META[t]
+                      const Icon = meta.icon
+                      return (
+                        <button
+                          key={t}
+                          type="button"
+                          onClick={() => setType(t)}
+                          className={cn(
+                            'flex flex-col items-center gap-1 rounded-lg border p-2 transition-colors',
+                            type === t
+                              ? 'border-primary bg-primary/10'
+                              : 'border-border/60 bg-muted/30 hover:bg-accent',
+                          )}
+                        >
+                          <Icon className={cn('h-4 w-4', meta.tint)} />
+                          <span className="text-center text-[10px] leading-tight">{meta.label}</span>
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+
+                <div className="grid gap-1.5">
+                  <Label>Who did it</Label>
+                  <div className="flex flex-wrap gap-1.5">
+                    {participants.map((p) => (
+                      <button
+                        key={p.id}
+                        type="button"
+                        onClick={() => {
+                          setActorId(actorId === p.id ? '' : p.id)
+                          setCard(null)
+                        }}
+                        className={chipCls(actorId === p.id)}
+                      >
+                        <Avatar name={p.player.name} color={null} size={16} />
+                        <span className="max-w-24 truncate">{p.player.name}</span>
+                      </button>
                     ))}
-                  </select>
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="grid gap-1.5">
-                    <Label>Actor</Label>
-                    <select
-                      value={actorId}
-                      onChange={(e) => setActorId(e.target.value)}
-                      className={selectCls}
-                    >
-                      <option value="">—</option>
-                      {participants.map((p) => (
-                        <option key={p.id} value={p.id}>
-                          {p.player.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="grid gap-1.5">
-                    <Label>Target</Label>
-                    <select
-                      value={targetId}
-                      onChange={(e) => setTargetId(e.target.value)}
-                      className={selectCls}
-                    >
-                      <option value="">—</option>
-                      {participants.map((p) => (
-                        <option key={p.id} value={p.id}>
-                          {p.player.name}
-                        </option>
-                      ))}
-                    </select>
                   </div>
                 </div>
 
                 <div className="grid gap-1.5">
-                  <Label>Turn (optional)</Label>
-                  <Input
-                    type="number"
-                    min={1}
-                    value={turn}
-                    onChange={(e) => setTurn(e.target.value)}
-                    placeholder="e.g. 6"
-                  />
+                  <Label>Against (optional)</Label>
+                  <div className="flex flex-wrap gap-1.5">
+                    {participants.map((p) => (
+                      <button
+                        key={p.id}
+                        type="button"
+                        onClick={() => {
+                          setTargetId(targetId === p.id ? '' : p.id)
+                          setTargetCard(null)
+                        }}
+                        className={chipCls(targetId === p.id)}
+                      >
+                        <Avatar name={p.player.name} color={null} size={16} />
+                        <span className="max-w-24 truncate">{p.player.name}</span>
+                      </button>
+                    ))}
+                  </div>
                 </div>
 
                 <div className="grid gap-1.5">
-                  <Label>Card (optional)</Label>
+                  <Label>Card played (optional)</Label>
                   {card ? (
-                    <CardHover
-                      as="div"
-                      image={card.imageUrl}
-                      name={card.name}
-                      className="flex items-center gap-2 rounded-md border p-2"
-                    >
-                      {card.artCropUrl && (
-                        <img src={card.artCropUrl} alt="" className="h-8 w-12 rounded object-cover" />
-                      )}
-                      <span className="flex-1 truncate text-sm">{card.name}</span>
-                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setCard(null)}>
-                        <X className="h-3.5 w-3.5" />
-                      </Button>
-                    </CardHover>
+                    <PickedCard card={card} onClear={() => setCard(null)} />
                   ) : (
                     <div className="space-y-2">
                       {commanderPick && (
@@ -786,13 +849,94 @@ export function MatchDetailPage() {
                   )}
                 </div>
 
-                <div className="grid gap-1.5">
-                  <Label>Note (optional)</Label>
-                  <Input
-                    value={note}
-                    onChange={(e) => setNote(e.target.value)}
-                    placeholder="e.g. during their upkeep"
-                  />
+                {targetId && (
+                  <div className="grid gap-1.5">
+                    <Label>Targeted card (optional)</Label>
+                    {targetCard ? (
+                      <PickedCard card={targetCard} onClear={() => setTargetCard(null)} />
+                    ) : (
+                      <div className="space-y-2">
+                        {targetCommander && (
+                          <CardHover
+                            as="div"
+                            image={targetCommander.imageUrl}
+                            name={targetCommander.name}
+                          >
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="w-full justify-start gap-2"
+                              onClick={() =>
+                                setTargetCard({
+                                  scryfallId: targetCommander.scryfallId,
+                                  name: targetCommander.name,
+                                  artCropUrl: targetCommander.artCropUrl,
+                                  imageUrl: targetCommander.imageUrl,
+                                })
+                              }
+                            >
+                              <Crown className="h-3.5 w-3.5 text-amber-400" />
+                              <span className="truncate">{targetCommander.name}</span>
+                            </Button>
+                          </CardHover>
+                        )}
+                        {targetTags.isLoading ? (
+                          <p className="text-xs text-muted-foreground">
+                            Scanning {target?.player.name}'s deck…
+                          </p>
+                        ) : (targetTags.data?.length ?? 0) > 0 ? (
+                          <select
+                            className={cn(selectCls, 'w-full')}
+                            value=""
+                            onChange={(e) => {
+                              const c = targetTags.data?.find((s) => s.scryfallId === e.target.value)
+                              if (c)
+                                setTargetCard({
+                                  scryfallId: c.scryfallId,
+                                  name: c.name,
+                                  artCropUrl: c.artCropUrl,
+                                  imageUrl: c.imageUrl,
+                                })
+                            }}
+                          >
+                            <option value="" disabled>
+                              {target?.player.name}'s deck ({targetTags.data!.length} cards)…
+                            </option>
+                            {targetTags.data!.map((c) => (
+                              <option key={c.scryfallId} value={c.scryfallId}>
+                                {c.name}
+                              </option>
+                            ))}
+                          </select>
+                        ) : (
+                          <p className="text-xs text-muted-foreground">
+                            No card list available for this deck.
+                          </p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                <div className="grid grid-cols-[6rem_1fr] gap-3">
+                  <div className="grid gap-1.5">
+                    <Label>Turn</Label>
+                    <Input
+                      type="number"
+                      min={1}
+                      value={turn}
+                      onChange={(e) => setTurn(e.target.value)}
+                      placeholder="6"
+                    />
+                  </div>
+                  <div className="grid gap-1.5">
+                    <Label>Note (optional)</Label>
+                    <Input
+                      value={note}
+                      onChange={(e) => setNote(e.target.value)}
+                      placeholder="e.g. during their upkeep"
+                    />
+                  </div>
                 </div>
 
                 <Button

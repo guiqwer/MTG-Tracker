@@ -58,6 +58,7 @@ export const matches = new Elysia({ prefix: '/matches' })
             actor: { include: { player: true } },
             target: { include: { player: true } },
             card: true,
+            targetCard: true,
           },
         },
         bestCard: true,
@@ -260,7 +261,10 @@ export const matches = new Elysia({ prefix: '/matches' })
         orderBy: { sequence: 'desc' },
         select: { sequence: true },
       })
-      const card = body.cardScryfallId ? await importCard(body.cardScryfallId) : null
+      const [card, targetCard] = await Promise.all([
+        body.cardScryfallId ? importCard(body.cardScryfallId) : null,
+        body.targetCardScryfallId ? importCard(body.targetCardScryfallId) : null,
+      ])
       const event = await prisma.matchEvent.create({
         data: {
           matchId: params.id,
@@ -270,6 +274,7 @@ export const matches = new Elysia({ prefix: '/matches' })
           actorId: body.actorId || undefined,
           targetId: body.targetId || undefined,
           cardId: card?.id,
+          targetCardId: targetCard?.id,
           note: body.note || undefined,
           respondsToId: body.respondsToId || undefined,
         },
@@ -277,6 +282,7 @@ export const matches = new Elysia({ prefix: '/matches' })
           actor: { include: { player: true } },
           target: { include: { player: true } },
           card: true,
+          targetCard: true,
         },
       })
       publishMatchUpdate(params.id)
@@ -289,6 +295,7 @@ export const matches = new Elysia({ prefix: '/matches' })
         actorId: t.Optional(t.String()),
         targetId: t.Optional(t.String()),
         cardScryfallId: t.Optional(t.String()),
+        targetCardScryfallId: t.Optional(t.String()),
         note: t.Optional(t.String()),
         respondsToId: t.Optional(t.String()),
       }),

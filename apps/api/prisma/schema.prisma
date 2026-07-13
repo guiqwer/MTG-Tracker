@@ -154,6 +154,7 @@ model Card {
   bestInMatches  Match[]      @relation("BestCard")
   deckCards      DeckCard[]
   events         MatchEvent[]
+  targetedBy     MatchEvent[] @relation("TargetCard")
 
   @@map("cards")
 }
@@ -278,6 +279,10 @@ model MatchEvent {
   target    MatchParticipant? @relation("Target", fields: [targetId], references: [id])
   cardId    String?
   card      Card?             @relation(fields: [cardId], references: [id])
+  // The card the event was aimed at (e.g. removal targeting a commander) —
+  // picked from the target player's deck.
+  targetCardId String?
+  targetCard   Card?          @relation("TargetCard", fields: [targetCardId], references: [id])
   note      String?
   // Stack: an event can respond to another (counter a spell, counter the
   // counter…). Deleting the parent keeps responses as roots.
