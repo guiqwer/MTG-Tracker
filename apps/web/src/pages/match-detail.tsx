@@ -1,9 +1,8 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { Fragment, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import {
-  ArrowRight,
   Ban,
   BookOpen,
   ChevronLeft,
@@ -335,7 +334,65 @@ export function MatchDetailPage() {
     )
   }
 
-  const renderEvent = (ev: (typeof events)[number]): ReactNode => {
+  // ── Narrative timeline ────────────────────────────────────────────────
+  // Events read as sentences ("Alice removed Atraxa with Swords to
+  // Plowshares") instead of disconnected type/actor/card fields.
+  const who = (p: { player: { name: string } }) => (
+    <span className="inline-flex items-center gap-1 align-baseline font-semibold text-foreground">
+      <Avatar name={p.player.name} color={null} size={15} />
+      {p.player.name}
+    </span>
+  )
+  const namedCard = (c: { name: string; imageUrl: string | null }) => (
+    <CardHover image={c.imageUrl} name={c.name} className="font-semibold text-foreground">
+      {c.name}
+    </CardHover>
+  )
+
+  const eventSentence = (ev: (typeof events)[number]): ReactNode => {
+    const A = ev.actor ? who(ev.actor) : 'Someone'
+    const T = ev.target ? who(ev.target) : null
+    const C = ev.card ? namedCard(ev.card) : null
+    const TC = ev.targetCard ? namedCard(ev.targetCard) : null
+    const withCard = C ? <> with {C}</> : null
+    switch (ev.type) {
+      case 'REMOVAL':
+        return <>{A} removed {TC ?? (T ? <>one of {T}'s permanents</> : 'a permanent')}{withCard}</>
+      case 'COUNTER':
+        return <>{A} countered {TC ?? (T ? <>{T}'s spell</> : 'a spell')}{withCard}</>
+      case 'BOARDWIPE':
+        return <>{A} wiped the board{withCard}{TC && <>, taking down {TC}</>}</>
+      case 'TUTOR':
+        return <>{A} tutored{TC && <> for {TC}</>}{withCard}{T && <> against {T}</>}</>
+      case 'RAMP':
+        return <>{A} ramped{withCard}</>
+      case 'DRAW':
+        return <>{A} drew cards{withCard}</>
+      case 'COMMANDER_CAST':
+        return <>{A} cast {C ?? 'their commander'}</>
+      case 'COMMANDER_DIED':
+        return <>{A} lost {C ?? 'their commander'}{T && <> to {T}</>}</>
+      case 'COMBO':
+        return <>{A} comboed off{withCard}{T && <> against {T}</>}</>
+      case 'INFINITE':
+        return <>{A} went infinite{withCard}{T && <> against {T}</>}</>
+      case 'ELIMINATION':
+        return <>{A} eliminated {T ?? 'a player'}{withCard}</>
+      case 'WIN':
+        return <>{A} won the game{withCard}</>
+      default:
+        return (
+          <>
+            {A} — {EVENT_META[ev.type]?.label ?? ev.type}
+            {withCard}
+            {T && <> vs {T}</>}
+            {TC && <> on {TC}</>}
+          </>
+        )
+    }
+  }
+
+  const renderEvent = (ev: (typeof events)[number], depth = 0): ReactNode => {
     const meta = EVENT_META[ev.type] ?? {
       label: ev.type,
       icon: Zap,
@@ -348,60 +405,32 @@ export function MatchDetailPage() {
       <li key={ev.id}>
         <div
           className={cn(
-            'group flex items-start gap-3 rounded-lg border border-border/60 bg-muted/40 p-2.5',
-            countered && 'opacity-75',
+            'group flex items-start gap-3 rounded-lg p-2 transition-colors hover:bg-muted/50',
+            countered && 'opacity-70',
           )}
         >
           <div
             className={cn(
-              'mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-muted',
+              'mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted',
               meta.tint,
             )}
           >
             <Icon className="h-4 w-4" />
           </div>
           <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2">
-              <span className={cn('text-sm font-semibold', countered && 'line-through')}>
-                {meta.label}
-              </span>
+            <p className={cn('text-sm leading-relaxed', countered && 'line-through')}>
+              {eventSentence(ev)}
+            </p>
+            <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
+              <span>{meta.label}</span>
               {countered && (
                 <Badge variant="outline" className="border-destructive/40 text-destructive">
                   Countered
                 </Badge>
               )}
-              {ev.turn != null && <Badge variant="outline">Turn {ev.turn}</Badge>}
+              {depth > 0 && ev.turn != null && <span>Turn {ev.turn}</span>}
+              {ev.note && <span className="italic">“{ev.note}”</span>}
             </div>
-            <div className="mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs text-muted-foreground">
-              {ev.actor && (
-                <span className="font-medium text-foreground/80">{ev.actor.player.name}</span>
-              )}
-              {ev.target && (
-                <>
-                  <ArrowRight className="h-3 w-3" />
-                  <span className="font-medium text-foreground/80">{ev.target.player.name}</span>
-                </>
-              )}
-              {ev.card && (
-                <CardHover
-                  image={ev.card.imageUrl}
-                  name={ev.card.name}
-                  className={cn(countered && 'line-through')}
-                >
-                  · {ev.card.name}
-                </CardHover>
-              )}
-              {ev.targetCard && (
-                <CardHover
-                  image={ev.targetCard.imageUrl}
-                  name={ev.targetCard.name}
-                  className={cn(countered && 'line-through')}
-                >
-                  {ev.card ? 'on' : '·'} {ev.targetCard.name}
-                </CardHover>
-              )}
-            </div>
-            {ev.note && <p className="mt-1 text-xs text-muted-foreground">{ev.note}</p>}
           </div>
           {ev.card?.artCropUrl && (
             <CardHover as="div" image={ev.card.imageUrl} name={ev.card.name} className="shrink-0">
@@ -428,8 +457,8 @@ export function MatchDetailPage() {
           </Button>
         </div>
         {kids.length > 0 && (
-          <ol className="ml-4 mt-2 space-y-2 border-l-2 border-border/70 pl-3">
-            {kids.map((k) => renderEvent(k))}
+          <ol className="ml-5 mt-1 space-y-1 border-l-2 border-border/70 pl-4">
+            {kids.map((k) => renderEvent(k, depth + 1))}
           </ol>
         )}
       </li>
@@ -683,7 +712,25 @@ export function MatchDetailPage() {
                     No events yet. Use the panel on the right to log the first one.
                   </p>
                 ) : (
-                  <ol className="space-y-2">{eventTree.roots.map((ev) => renderEvent(ev))}</ol>
+                  <ol className="space-y-1">
+                    {eventTree.roots.map((ev, i) => {
+                      const prev = eventTree.roots[i - 1]
+                      const showTurn = ev.turn != null && ev.turn !== prev?.turn
+                      return (
+                        <Fragment key={ev.id}>
+                          {showTurn && (
+                            <li className="flex items-center gap-2 pt-3 first:pt-0">
+                              <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                                Turn {ev.turn}
+                              </span>
+                              <span className="h-px flex-1 bg-border/70" />
+                            </li>
+                          )}
+                          {renderEvent(ev)}
+                        </Fragment>
+                      )
+                    })}
+                  </ol>
                 )}
               </CardContent>
             </Card>
