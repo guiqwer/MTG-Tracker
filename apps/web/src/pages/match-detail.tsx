@@ -1,4 +1,5 @@
-import { Fragment, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
@@ -6,12 +7,11 @@ import {
   Ban,
   BookOpen,
   ChevronLeft,
-  Clock,
   CornerDownRight,
   Crown,
   Flame,
-  Hash,
   Infinity as InfinityIcon,
+  Minus,
   Plus,
   Reply,
   Search,
@@ -106,6 +106,58 @@ function PickedCard({ card, onClear }: { card: CardPick; onClear: () => void }) 
   )
 }
 
+// Searchable picker over a deck's card list — a native select with 100 options
+// is unusable on touch, so this filters as you type. Short lists (a narrowed
+// tag match) render immediately; long ones wait for a query.
+function CardCombobox({
+  cards,
+  placeholder,
+  onPick,
+}: {
+  cards: TaggedCard[]
+  placeholder: string
+  onPick: (c: TaggedCard) => void
+}) {
+  const [q, setQ] = useState('')
+  const query = q.trim().toLowerCase()
+  const filtered = useMemo(() => {
+    const list = query ? cards.filter((c) => c.name.toLowerCase().includes(query)) : cards
+    return list.slice(0, 30)
+  }, [query, cards])
+  const showList = query !== '' || cards.length <= 30
+  return (
+    <div className="overflow-hidden rounded-md border">
+      <Input
+        value={q}
+        onChange={(e) => setQ(e.target.value)}
+        placeholder={placeholder}
+        className="rounded-none border-0 focus-visible:ring-0"
+      />
+      {showList && (
+        <ul className="max-h-44 overflow-y-auto border-t">
+          {filtered.map((c) => (
+            <li key={c.scryfallId}>
+              <button
+                type="button"
+                className="w-full truncate px-2.5 py-1.5 text-left text-sm transition-colors hover:bg-accent"
+                onClick={() => {
+                  onPick(c)
+                  setQ('')
+                }}
+              >
+                {c.name}
+              </button>
+            </li>
+          ))}
+          {filtered.length === 0 && (
+            <li className="px-2.5 py-2 text-xs text-muted-foreground">No cards match.</li>
+          )}
+        </ul>
+      )}
+    </div>
+  )
+}
+
 // Event types that map to a Scryfall Tagger oracle tag — for these the card
 // field offers a select of matching cards from the actor's deck.
 const EVENT_TAG: Record<string, string> = {
@@ -176,6 +228,8 @@ export function MatchDetailPage() {
   const [note, setNote] = useState('')
   const [card, setCard] = useState<CardPick | null>(null)
   const [targetCard, setTargetCard] = useState<CardPick | null>(null)
+  // Mobile: the add-event panel lives in a bottom sheet opened by a FAB.
+  const [sheetOpen, setSheetOpen] = useState(false)
 
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: ['match', matchId] })
@@ -214,12 +268,49 @@ export function MatchDetailPage() {
       const { error } = await api.matches({ id: matchId }).events({ eventId }).delete()
       if (error) throw error
     },
-    onSuccess: () => {
-      toast.success('Event removed')
-      invalidate()
-    },
+    onSuccess: () => invalidate(),
     onError: () => toast.error('Could not remove event'),
   })
+
+  // Deleting is undoable: the event hides instantly, the server delete only
+  // fires after the undo window closes (or on unmount, so nothing is lost).
+  const [hiddenIds, setHiddenIds] = useState<Set<string>>(new Set())
+  const deleteTimers = useRef(new Map<string, ReturnType<typeof setTimeout>>())
+  const scheduleDelete = (eventId: string) => {
+    setHiddenIds((prev) => new Set(prev).add(eventId))
+    const timer = setTimeout(() => {
+      deleteTimers.current.delete(eventId)
+      delEvent.mutate(eventId)
+    }, 5000)
+    deleteTimers.current.set(eventId, timer)
+    toast('Event removed', {
+      duration: 5000,
+      action: {
+        label: 'Undo',
+        onClick: () => {
+          clearTimeout(timer)
+          deleteTimers.current.delete(eventId)
+          setHiddenIds((prev) => {
+            const next = new Set(prev)
+            next.delete(eventId)
+            return next
+          })
+        },
+      },
+    })
+  }
+  useEffect(() => {
+    const timers = deleteTimers.current
+    return () => {
+      // Flush pending deletes when leaving the page — the user already saw
+      // the "removed" toast, so the delete must stick.
+      for (const [eventId, timer] of timers) {
+        clearTimeout(timer)
+        api.matches({ id: matchId }).events({ eventId }).delete()
+      }
+      timers.clear()
+    }
+  }, [matchId])
 
   const delMatch = useMutation({
     mutationFn: async () => {
@@ -246,6 +337,36 @@ export function MatchDetailPage() {
   const m = match.data
   const participants = m?.participants ?? []
   const events = m?.events ?? []
+  // Events pending an undoable delete stay out of every derived view.
+  const visibleEvents = useMemo(
+    () => events.filter((e) => !hiddenIds.has(e.id)),
+    [events, hiddenIds],
+  )
+
+  // Prefill the turn with the latest logged one — logging several plays in
+  // the same turn is the common case, and an empty field means ungrouped
+  // events in the timeline.
+  useEffect(() => {
+    if (turn !== '') return
+    const last = [...events].reverse().find((e) => e.turn != null)
+    if (last?.turn != null) setTurn(String(last.turn))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [events])
+
+  // Briefly highlight events that just arrived (own submits and SSE pushes
+  // from the rest of the table alike) so live updates are noticeable.
+  const knownIds = useRef<Set<string>>(new Set())
+  const [flashId, setFlashId] = useState<string | null>(null)
+  useEffect(() => {
+    const fresh = events.filter((e) => !knownIds.current.has(e.id))
+    if (knownIds.current.size > 0 && fresh.length > 0) {
+      setFlashId(fresh[fresh.length - 1].id)
+      const timer = setTimeout(() => setFlashId(null), 1600)
+      knownIds.current = new Set(events.map((e) => e.id))
+      return () => clearTimeout(timer)
+    }
+    knownIds.current = new Set(events.map((e) => e.id))
+  }, [events])
 
   // Deck-aware card suggestions: when the event type has an oracle tag and an
   // actor is picked, offer that player's matching cards instead of raw search.
@@ -288,10 +409,10 @@ export function MatchDetailPage() {
   // The stack: events chained via respondsToId render as nested responses.
   const [respondTo, setRespondTo] = useState<{ id: string; label: string } | null>(null)
   const eventTree = useMemo(() => {
-    const ids = new Set(events.map((e) => e.id))
-    const byParent = new Map<string, typeof events>()
-    const roots: typeof events = []
-    for (const ev of events) {
+    const ids = new Set(visibleEvents.map((e) => e.id))
+    const byParent = new Map<string, typeof visibleEvents>()
+    const roots: typeof visibleEvents = []
+    for (const ev of visibleEvents) {
       if (ev.respondsToId && ids.has(ev.respondsToId)) {
         const list = byParent.get(ev.respondsToId) ?? []
         list.push(ev)
@@ -301,23 +422,24 @@ export function MatchDetailPage() {
       }
     }
     return { roots, byParent }
-  }, [events])
+  }, [visibleEvents])
   // An event fizzles when an (itself uncountered) COUNTER responds to it —
   // responses always come later in sequence, so one reverse pass suffices.
   const fizzled = useMemo(() => {
     const out = new Set<string>()
-    for (let i = events.length - 1; i >= 0; i--) {
-      const ev = events[i]
+    for (let i = visibleEvents.length - 1; i >= 0; i--) {
+      const ev = visibleEvents[i]
       const kids = eventTree.byParent.get(ev.id) ?? []
       if (kids.some((k) => k.type === 'COUNTER' && !out.has(k.id))) out.add(ev.id)
     }
     return out
-  }, [events, eventTree])
+  }, [visibleEvents, eventTree])
 
   const startResponse = (ev: (typeof events)[number]) => {
     const what = ev.card?.name ?? EVENT_META[ev.type]?.label ?? ev.type
     const who = ev.actor ? ` by ${ev.actor.player.name}` : ''
     setRespondTo({ id: ev.id, label: `${what}${who}` })
+    setSheetOpen(true)
     setType('COUNTER')
     if (ev.actorId) setTargetId(ev.actorId)
     setCard(null)
@@ -343,16 +465,28 @@ export function MatchDetailPage() {
       {p.player.name}
     </span>
   )
-  const namedCard = (c: { name: string; imageUrl: string | null }) => (
-    <CardHover image={c.imageUrl} name={c.name} className="font-semibold text-foreground">
+  // The dotted underline doubles as the affordance for the hover/tap card
+  // preview; a countered spell gets struck through instead.
+  const namedCard = (c: { name: string; imageUrl: string | null }, struck = false) => (
+    <CardHover
+      image={c.imageUrl}
+      name={c.name}
+      className={cn(
+        'font-semibold',
+        struck
+          ? 'text-muted-foreground line-through'
+          : 'text-foreground underline decoration-primary/50 decoration-dotted underline-offset-2',
+      )}
+    >
       {c.name}
     </CardHover>
   )
 
   const eventSentence = (ev: (typeof events)[number]): ReactNode => {
+    const countered = fizzled.has(ev.id)
     const A = ev.actor ? who(ev.actor) : 'Someone'
     const T = ev.target ? who(ev.target) : null
-    const C = ev.card ? namedCard(ev.card) : null
+    const C = ev.card ? namedCard(ev.card, countered) : null
     const TC = ev.targetCard ? namedCard(ev.targetCard) : null
     const withCard = C ? <> with {C}</> : null
     switch (ev.type) {
@@ -401,12 +535,17 @@ export function MatchDetailPage() {
     const Icon = meta.icon
     const kids = eventTree.byParent.get(ev.id) ?? []
     const countered = fizzled.has(ev.id)
+    const time = new Date(ev.createdAt).toLocaleTimeString('en-US', {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    })
     return (
       <li key={ev.id}>
         <div
           className={cn(
-            'group flex items-start gap-3 rounded-lg p-2 transition-colors hover:bg-muted/50',
-            countered && 'opacity-70',
+            'group flex items-start gap-3 rounded-lg p-2 transition-colors duration-700 hover:bg-muted/50',
+            flashId === ev.id && 'bg-primary/10 duration-0',
           )}
         >
           <div
@@ -418,11 +557,11 @@ export function MatchDetailPage() {
             <Icon className="h-4 w-4" />
           </div>
           <div className="min-w-0 flex-1">
-            <p className={cn('text-sm leading-relaxed', countered && 'line-through')}>
+            <p className={cn('text-sm leading-relaxed', countered && 'text-muted-foreground')}>
               {eventSentence(ev)}
             </p>
             <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
-              <span>{meta.label}</span>
+              <span>{time}</span>
               {countered && (
                 <Badge variant="outline" className="border-destructive/40 text-destructive">
                   Countered
@@ -432,29 +571,28 @@ export function MatchDetailPage() {
               {ev.note && <span className="italic">“{ev.note}”</span>}
             </div>
           </div>
-          {ev.card?.artCropUrl && (
-            <CardHover as="div" image={ev.card.imageUrl} name={ev.card.name} className="shrink-0">
-              <img src={ev.card.artCropUrl} alt="" className="block h-9 w-14 rounded object-cover" />
-            </CardHover>
-          )}
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-7 w-7 shrink-0 transition-opacity sm:opacity-0 sm:group-hover:opacity-100"
-            onClick={() => startResponse(ev)}
-            title="Respond (add to the stack)"
-          >
-            <Reply className="h-3.5 w-3.5 text-primary" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-7 w-7 shrink-0 transition-opacity sm:opacity-0 sm:group-hover:opacity-100"
-            onClick={() => delEvent.mutate(ev.id)}
-            title="Remove event"
-          >
-            <Trash2 className="h-3.5 w-3.5 text-destructive" />
-          </Button>
+          <div className="flex shrink-0 items-center gap-1">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-10 w-10 transition-opacity sm:h-8 sm:w-8 sm:opacity-0 sm:group-hover:opacity-100"
+              onClick={() => startResponse(ev)}
+              title="Respond (add to the stack)"
+              aria-label={`Respond to ${meta.label}`}
+            >
+              <Reply className="h-3.5 w-3.5 text-primary" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-10 w-10 transition-opacity sm:h-8 sm:w-8 sm:opacity-0 sm:group-hover:opacity-100"
+              onClick={() => scheduleDelete(ev.id)}
+              title="Remove event"
+              aria-label={`Remove ${meta.label} event`}
+            >
+              <Trash2 className="h-3.5 w-3.5 text-destructive" />
+            </Button>
+          </div>
         </div>
         {kids.length > 0 && (
           <ol className="ml-5 mt-1 space-y-1 border-l-2 border-border/70 pl-4">
@@ -524,10 +662,294 @@ export function MatchDetailPage() {
   })
 
   const isLive = m?.status === 'IN_PROGRESS'
-  const elapsed = m ? Math.max(0, Math.round((Date.now() - new Date(m.playedAt).getTime()) / 60_000)) : 0
+  // The table clock ticks on its own; past ~12h the match was clearly left
+  // open, so the badge stops pretending the game is that long.
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => {
+    if (!isLive) return
+    const timer = setInterval(() => setNow(Date.now()), 30_000)
+    return () => clearInterval(timer)
+  }, [isLive])
+  const elapsedMins = m ? Math.max(0, Math.round((now - new Date(m.playedAt).getTime()) / 60_000)) : 0
+  const elapsedLabel =
+    elapsedMins < 60
+      ? `${elapsedMins} min`
+      : elapsedMins < 720
+        ? `${Math.floor(elapsedMins / 60)}h${elapsedMins % 60 ? ` ${elapsedMins % 60}min` : ''}`
+        : null
+
+  // Shared between the desktop side panel and the mobile bottom sheet — a
+  // plain JSX value (not a component) so inputs keep focus across re-renders.
+  const addEventForm = (
+    <div className="space-y-3">
+      {respondTo && (
+        <div className="flex items-center gap-2 rounded-md border border-primary/40 bg-primary/5 p-2 text-xs">
+          <CornerDownRight className="h-3.5 w-3.5 shrink-0 text-primary" />
+          <span className="min-w-0 flex-1 truncate">
+            Responding to <span className="font-medium">{respondTo.label}</span>
+          </span>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-6 w-6 shrink-0"
+            onClick={() => {
+              setRespondTo(null)
+              setTargetCard(null)
+            }}
+            title="Cancel response"
+            aria-label="Cancel response"
+          >
+            <X className="h-3 w-3" />
+          </Button>
+        </div>
+      )}
+
+      <div className="grid gap-1.5">
+        <Label>What happened</Label>
+        <div className="grid grid-cols-3 gap-1.5">
+          {EVENT_TYPES.map((t) => {
+            const meta = EVENT_META[t]
+            const Icon = meta.icon
+            return (
+              <button
+                key={t}
+                type="button"
+                aria-pressed={type === t}
+                onClick={() => setType(t)}
+                className={cn(
+                  'flex flex-col items-center gap-1 rounded-lg border p-2 transition-colors',
+                  type === t
+                    ? 'border-primary bg-primary/10'
+                    : 'border-border/60 bg-muted/30 hover:bg-accent',
+                )}
+              >
+                <Icon className={cn('h-4 w-4', meta.tint)} />
+                <span className="text-center text-[11px] leading-tight">{meta.label}</span>
+              </button>
+            )
+          })}
+        </div>
+      </div>
+
+      <div className="grid gap-1.5">
+        <Label>
+          Who did it <span className="text-destructive">*</span>
+        </Label>
+        <div className="flex flex-wrap gap-1.5">
+          {participants.map((p) => (
+            <button
+              key={p.id}
+              type="button"
+              aria-pressed={actorId === p.id}
+              onClick={() => {
+                setActorId(actorId === p.id ? '' : p.id)
+                setCard(null)
+              }}
+              className={chipCls(actorId === p.id)}
+            >
+              <Avatar name={p.player.name} color={null} size={16} />
+              <span className="max-w-24 truncate">{p.player.name}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="grid gap-1.5">
+        <Label>Against (optional)</Label>
+        <div className="flex flex-wrap gap-1.5">
+          {participants.map((p) => (
+            <button
+              key={p.id}
+              type="button"
+              aria-pressed={targetId === p.id}
+              onClick={() => {
+                setTargetId(targetId === p.id ? '' : p.id)
+                setTargetCard(null)
+              }}
+              className={chipCls(targetId === p.id)}
+            >
+              <Avatar name={p.player.name} color={null} size={16} />
+              <span className="max-w-24 truncate">{p.player.name}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="grid gap-1.5">
+        <Label>Card played (optional)</Label>
+        {card ? (
+          <PickedCard card={card} onClear={() => setCard(null)} />
+        ) : (
+          <div className="space-y-2">
+            {commanderPick && (
+              <CardHover as="div" image={commanderPick.imageUrl} name={commanderPick.name}>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full justify-start gap-2"
+                  onClick={() =>
+                    setCard({
+                      scryfallId: commanderPick.scryfallId,
+                      name: commanderPick.name,
+                      artCropUrl: commanderPick.artCropUrl,
+                      imageUrl: commanderPick.imageUrl,
+                    })
+                  }
+                >
+                  <Crown className="h-3.5 w-3.5 text-amber-400" />
+                  <span className="truncate">{commanderPick.name}</span>
+                </Button>
+              </CardHover>
+            )}
+            {!actorId ? (
+              <p className="text-xs text-muted-foreground">
+                Pick an actor to choose a card from their deck.
+              </p>
+            ) : deckTags.isLoading ? (
+              <p className="text-xs text-muted-foreground">
+                Scanning {actor?.player.name}'s deck…
+              </p>
+            ) : suggestions.length > 0 ? (
+              <CardCombobox
+                cards={suggestions}
+                placeholder={
+                  narrowed
+                    ? `${EVENT_META[type].label} in ${actor?.player.name}'s deck (${suggestions.length})…`
+                    : `Search ${actor?.player.name}'s deck (${suggestions.length} cards)…`
+                }
+                onPick={(c) =>
+                  setCard({
+                    scryfallId: c.scryfallId,
+                    name: c.name,
+                    artCropUrl: c.artCropUrl,
+                    imageUrl: c.imageUrl,
+                  })
+                }
+              />
+            ) : (
+              <p className="text-xs text-muted-foreground">
+                No card list available for this deck.
+              </p>
+            )}
+          </div>
+        )}
+      </div>
+
+      {targetId && (
+        <div className="grid gap-1.5">
+          <Label>Targeted card (optional)</Label>
+          {targetCard ? (
+            <PickedCard card={targetCard} onClear={() => setTargetCard(null)} />
+          ) : (
+            <div className="space-y-2">
+              {targetCommander && (
+                <CardHover as="div" image={targetCommander.imageUrl} name={targetCommander.name}>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-full justify-start gap-2"
+                    onClick={() =>
+                      setTargetCard({
+                        scryfallId: targetCommander.scryfallId,
+                        name: targetCommander.name,
+                        artCropUrl: targetCommander.artCropUrl,
+                        imageUrl: targetCommander.imageUrl,
+                      })
+                    }
+                  >
+                    <Crown className="h-3.5 w-3.5 text-amber-400" />
+                    <span className="truncate">{targetCommander.name}</span>
+                  </Button>
+                </CardHover>
+              )}
+              {targetTags.isLoading ? (
+                <p className="text-xs text-muted-foreground">
+                  Scanning {target?.player.name}'s deck…
+                </p>
+              ) : (targetTags.data?.length ?? 0) > 0 ? (
+                <CardCombobox
+                  cards={targetTags.data!}
+                  placeholder={`Search ${target?.player.name}'s deck (${targetTags.data!.length} cards)…`}
+                  onPick={(c) =>
+                    setTargetCard({
+                      scryfallId: c.scryfallId,
+                      name: c.name,
+                      artCropUrl: c.artCropUrl,
+                      imageUrl: c.imageUrl,
+                    })
+                  }
+                />
+              ) : (
+                <p className="text-xs text-muted-foreground">
+                  No card list available for this deck.
+                </p>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      <div className="grid grid-cols-[auto_1fr] gap-3">
+        <div className="grid gap-1.5">
+          <Label>Turn</Label>
+          <div className="flex items-center gap-1">
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              className="h-9 w-9 shrink-0"
+              aria-label="Previous turn"
+              onClick={() => setTurn((v) => String(Math.max(1, (Number(v) || 2) - 1)))}
+            >
+              <Minus className="h-3.5 w-3.5" />
+            </Button>
+            <Input
+              type="number"
+              min={1}
+              value={turn}
+              onChange={(e) => setTurn(e.target.value)}
+              placeholder="1"
+              className="w-14 text-center"
+            />
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              className="h-9 w-9 shrink-0"
+              aria-label="Next turn"
+              onClick={() => setTurn((v) => String((Number(v) || 0) + 1))}
+            >
+              <Plus className="h-3.5 w-3.5" />
+            </Button>
+          </div>
+        </div>
+        <div className="grid gap-1.5">
+          <Label>Note (optional)</Label>
+          <Input
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            placeholder="e.g. during their upkeep"
+          />
+        </div>
+      </div>
+
+      <Button
+        className="w-full"
+        onClick={() => addEvent.mutate()}
+        disabled={addEvent.isPending || !actorId}
+      >
+        <Plus /> {addEvent.isPending ? 'Adding…' : 'Add to timeline'}
+      </Button>
+      {!actorId && (
+        <p className="text-center text-xs text-muted-foreground">
+          Pick who did it to log the event.
+        </p>
+      )}
+    </div>
+  )
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 pb-20 lg:pb-0">
       <Link
         to="/app/matches"
         className="inline-flex items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground"
@@ -559,7 +981,7 @@ export function MatchDetailPage() {
                   <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-success opacity-60" />
                   <span className="relative inline-flex h-2 w-2 rounded-full bg-success" />
                 </span>
-                Live · {elapsed} min
+                Live{elapsedLabel && ` · ${elapsedLabel}`}
               </Badge>
             ) : (
               m.winCondition && (
@@ -693,7 +1115,8 @@ export function MatchDetailPage() {
                     <div className="min-w-0">
                       <div className="flex items-center gap-1 text-sm font-semibold">
                         {won && <Trophy className="h-3.5 w-3.5 text-gold" />}
-                        {p.placement ? `${p.placement}${suffix}` : '—'} {p.player.name}
+                        {p.placement ? `${p.placement}${suffix} ` : ''}
+                        {p.player.name}
                       </div>
                       <div className="truncate text-xs text-muted-foreground">{p.deck.name}</div>
                     </div>
@@ -709,7 +1132,7 @@ export function MatchDetailPage() {
                 <h2 className="mb-3 text-base font-semibold">Timeline</h2>
                 {events.length === 0 ? (
                   <p className="rounded-lg border border-dashed border-border/70 py-10 text-center text-sm text-muted-foreground">
-                    No events yet. Use the panel on the right to log the first one.
+                    No events yet. Log the first play with Add event.
                   </p>
                 ) : (
                   <ol className="space-y-1">
@@ -735,267 +1158,55 @@ export function MatchDetailPage() {
               </CardContent>
             </Card>
 
-            {/* Add event */}
-            <Card className="h-fit lg:sticky lg:top-8">
+            {/* Add event — side panel on desktop, bottom sheet behind a FAB on mobile */}
+            <Card className="hidden h-fit lg:sticky lg:top-8 lg:block">
               <CardContent className="space-y-3 p-4">
                 <h2 className="text-base font-semibold">Add event</h2>
-
-                {respondTo && (
-                  <div className="flex items-center gap-2 rounded-md border border-primary/40 bg-primary/5 p-2 text-xs">
-                    <CornerDownRight className="h-3.5 w-3.5 shrink-0 text-primary" />
-                    <span className="min-w-0 flex-1 truncate">
-                      Responding to <span className="font-medium">{respondTo.label}</span>
-                    </span>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-6 w-6 shrink-0"
-                      onClick={() => {
-                        setRespondTo(null)
-                        setTargetCard(null)
-                      }}
-                      title="Cancel response"
-                    >
-                      <X className="h-3 w-3" />
-                    </Button>
-                  </div>
-                )}
-
-                <div className="grid gap-1.5">
-                  <Label>What happened</Label>
-                  <div className="grid grid-cols-3 gap-1.5">
-                    {EVENT_TYPES.map((t) => {
-                      const meta = EVENT_META[t]
-                      const Icon = meta.icon
-                      return (
-                        <button
-                          key={t}
-                          type="button"
-                          onClick={() => setType(t)}
-                          className={cn(
-                            'flex flex-col items-center gap-1 rounded-lg border p-2 transition-colors',
-                            type === t
-                              ? 'border-primary bg-primary/10'
-                              : 'border-border/60 bg-muted/30 hover:bg-accent',
-                          )}
-                        >
-                          <Icon className={cn('h-4 w-4', meta.tint)} />
-                          <span className="text-center text-[10px] leading-tight">{meta.label}</span>
-                        </button>
-                      )
-                    })}
-                  </div>
-                </div>
-
-                <div className="grid gap-1.5">
-                  <Label>Who did it</Label>
-                  <div className="flex flex-wrap gap-1.5">
-                    {participants.map((p) => (
-                      <button
-                        key={p.id}
-                        type="button"
-                        onClick={() => {
-                          setActorId(actorId === p.id ? '' : p.id)
-                          setCard(null)
-                        }}
-                        className={chipCls(actorId === p.id)}
-                      >
-                        <Avatar name={p.player.name} color={null} size={16} />
-                        <span className="max-w-24 truncate">{p.player.name}</span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="grid gap-1.5">
-                  <Label>Against (optional)</Label>
-                  <div className="flex flex-wrap gap-1.5">
-                    {participants.map((p) => (
-                      <button
-                        key={p.id}
-                        type="button"
-                        onClick={() => {
-                          setTargetId(targetId === p.id ? '' : p.id)
-                          setTargetCard(null)
-                        }}
-                        className={chipCls(targetId === p.id)}
-                      >
-                        <Avatar name={p.player.name} color={null} size={16} />
-                        <span className="max-w-24 truncate">{p.player.name}</span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="grid gap-1.5">
-                  <Label>Card played (optional)</Label>
-                  {card ? (
-                    <PickedCard card={card} onClear={() => setCard(null)} />
-                  ) : (
-                    <div className="space-y-2">
-                      {commanderPick && (
-                        <CardHover as="div" image={commanderPick.imageUrl} name={commanderPick.name}>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="w-full justify-start gap-2"
-                            onClick={() =>
-                              setCard({
-                                scryfallId: commanderPick.scryfallId,
-                                name: commanderPick.name,
-                                artCropUrl: commanderPick.artCropUrl,
-                                imageUrl: commanderPick.imageUrl,
-                              })
-                            }
-                          >
-                            <Crown className="h-3.5 w-3.5 text-amber-400" />
-                            <span className="truncate">{commanderPick.name}</span>
-                          </Button>
-                        </CardHover>
-                      )}
-                      {!actorId ? (
-                        <p className="text-xs text-muted-foreground">
-                          Pick an actor to choose a card from their deck.
-                        </p>
-                      ) : deckTags.isLoading ? (
-                        <p className="text-xs text-muted-foreground">
-                          Scanning {actor?.player.name}'s deck…
-                        </p>
-                      ) : suggestions.length > 0 ? (
-                        <select
-                          className={cn(selectCls, 'w-full')}
-                          value=""
-                          onChange={(e) => {
-                            const c = suggestions.find((s) => s.scryfallId === e.target.value)
-                            if (c)
-                              setCard({
-                                scryfallId: c.scryfallId,
-                                name: c.name,
-                                artCropUrl: c.artCropUrl,
-                                imageUrl: c.imageUrl,
-                              })
-                          }}
-                        >
-                          <option value="" disabled>
-                            {narrowed
-                              ? `${EVENT_META[type].label} in ${actor?.player.name}'s deck (${suggestions.length})…`
-                              : `${actor?.player.name}'s deck (${suggestions.length} cards)…`}
-                          </option>
-                          {suggestions.map((c) => (
-                            <option key={c.scryfallId} value={c.scryfallId}>
-                              {c.name}
-                            </option>
-                          ))}
-                        </select>
-                      ) : (
-                        <p className="text-xs text-muted-foreground">
-                          No card list available for this deck.
-                        </p>
-                      )}
-                    </div>
-                  )}
-                </div>
-
-                {targetId && (
-                  <div className="grid gap-1.5">
-                    <Label>Targeted card (optional)</Label>
-                    {targetCard ? (
-                      <PickedCard card={targetCard} onClear={() => setTargetCard(null)} />
-                    ) : (
-                      <div className="space-y-2">
-                        {targetCommander && (
-                          <CardHover
-                            as="div"
-                            image={targetCommander.imageUrl}
-                            name={targetCommander.name}
-                          >
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="w-full justify-start gap-2"
-                              onClick={() =>
-                                setTargetCard({
-                                  scryfallId: targetCommander.scryfallId,
-                                  name: targetCommander.name,
-                                  artCropUrl: targetCommander.artCropUrl,
-                                  imageUrl: targetCommander.imageUrl,
-                                })
-                              }
-                            >
-                              <Crown className="h-3.5 w-3.5 text-amber-400" />
-                              <span className="truncate">{targetCommander.name}</span>
-                            </Button>
-                          </CardHover>
-                        )}
-                        {targetTags.isLoading ? (
-                          <p className="text-xs text-muted-foreground">
-                            Scanning {target?.player.name}'s deck…
-                          </p>
-                        ) : (targetTags.data?.length ?? 0) > 0 ? (
-                          <select
-                            className={cn(selectCls, 'w-full')}
-                            value=""
-                            onChange={(e) => {
-                              const c = targetTags.data?.find((s) => s.scryfallId === e.target.value)
-                              if (c)
-                                setTargetCard({
-                                  scryfallId: c.scryfallId,
-                                  name: c.name,
-                                  artCropUrl: c.artCropUrl,
-                                  imageUrl: c.imageUrl,
-                                })
-                            }}
-                          >
-                            <option value="" disabled>
-                              {target?.player.name}'s deck ({targetTags.data!.length} cards)…
-                            </option>
-                            {targetTags.data!.map((c) => (
-                              <option key={c.scryfallId} value={c.scryfallId}>
-                                {c.name}
-                              </option>
-                            ))}
-                          </select>
-                        ) : (
-                          <p className="text-xs text-muted-foreground">
-                            No card list available for this deck.
-                          </p>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                <div className="grid grid-cols-[6rem_1fr] gap-3">
-                  <div className="grid gap-1.5">
-                    <Label>Turn</Label>
-                    <Input
-                      type="number"
-                      min={1}
-                      value={turn}
-                      onChange={(e) => setTurn(e.target.value)}
-                      placeholder="6"
-                    />
-                  </div>
-                  <div className="grid gap-1.5">
-                    <Label>Note (optional)</Label>
-                    <Input
-                      value={note}
-                      onChange={(e) => setNote(e.target.value)}
-                      placeholder="e.g. during their upkeep"
-                    />
-                  </div>
-                </div>
-
-                <Button
-                  className="w-full"
-                  onClick={() => addEvent.mutate()}
-                  disabled={addEvent.isPending}
-                >
-                  <Plus /> Add to timeline
-                </Button>
+                {addEventForm}
               </CardContent>
             </Card>
           </div>
+
+          {createPortal(
+            <div className="lg:hidden">
+              {sheetOpen ? (
+                <div className="fixed inset-0 z-50">
+                  <div
+                    className="absolute inset-0 bg-black/60"
+                    onClick={() => setSheetOpen(false)}
+                    aria-hidden
+                  />
+                  <div
+                    role="dialog"
+                    aria-label="Add event"
+                    className="absolute inset-x-0 bottom-0 max-h-[85dvh] overflow-y-auto rounded-t-2xl border-t bg-card p-4 pb-[max(1.25rem,env(safe-area-inset-bottom))] shadow-2xl"
+                  >
+                    <div className="mb-3 flex items-center justify-between">
+                      <h2 className="text-base font-semibold">Add event</h2>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-9 w-9"
+                        onClick={() => setSheetOpen(false)}
+                        aria-label="Close"
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+                    {addEventForm}
+                  </div>
+                </div>
+              ) : (
+                <Button
+                  className="fixed bottom-5 right-5 z-40 h-12 rounded-full px-5 shadow-lg"
+                  onClick={() => setSheetOpen(true)}
+                >
+                  <Plus /> Add event
+                </Button>
+              )}
+            </div>,
+            document.body,
+          )}
         </>
       )}
     </div>
